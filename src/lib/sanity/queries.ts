@@ -1,7 +1,7 @@
 export const recipesListQuery = `
 *[_type == "recipe" 
-  && (!defined($importStatus) || importStatus == $importStatus)
-  && (!defined($tag) || $tag in tags)
+  && (!defined($importStatus) || $importStatus == null || importStatus == $importStatus)
+  && (!defined($tag) || $tag == null || $tag in tags)
 ] | order(_createdAt desc) {
   _id,
   title,
