@@ -1,10 +1,12 @@
 import { createClient } from "@sanity/client";
 
-const projectId = process.env.SANITY_PROJECT_ID;
-const dataset = process.env.SANITY_DATASET;
+const projectId =
+  process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || process.env.SANITY_PROJECT_ID || "";
+const dataset =
+  process.env.NEXT_PUBLIC_SANITY_DATASET || process.env.SANITY_DATASET || "";
 
 if (!projectId || !dataset) {
-  console.warn("SANITY_PROJECT_ID or SANITY_DATASET is not set");
+  console.warn("SANITY projectId or dataset is not set. Check your env variables.");
 }
 
 const apiVersion = "2024-12-01";

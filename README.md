@@ -17,6 +17,10 @@ SANITY_PROJECT_ID=your_project_id
 SANITY_DATASET=production
 SANITY_API_TOKEN=your_sanity_token
 OPENAI_API_KEY=your_openai_key
+
+# Also expose for the browser (Studio and client queries)
+NEXT_PUBLIC_SANITY_PROJECT_ID=your_project_id
+NEXT_PUBLIC_SANITY_DATASET=production
 ```
 
 4) Run the app + Studio
