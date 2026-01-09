@@ -8,7 +8,20 @@ export const maxDuration = 60;
 
 async function extractTextFromPdfFile(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const pdfParse = (await import("pdf-parse")).default;
+  const pdfModule = await import("pdf-parse");
+  const pdfParse =
+    typeof pdfModule === "function"
+      ? pdfModule
+      : typeof (pdfModule as any)?.default === "function"
+        ? (pdfModule as any).default
+        : typeof (pdfModule as any)?.default?.default === "function"
+          ? (pdfModule as any).default.default
+          : null;
+
+  if (!pdfParse) {
+    throw new TypeError("pdf-parse module did not export a function");
+  }
+
   const parsed = await pdfParse(buffer);
   return parsed.text;
 }
