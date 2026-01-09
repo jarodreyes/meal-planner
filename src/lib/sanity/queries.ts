@@ -34,7 +34,7 @@ export const mealPlansQuery = `
 *[_type == "mealPlan"] | order(weekOf desc) {
   _id,
   weekOf,
-  count(meals) as mealCount
+  "mealCount": count(meals)
 }`;
 
 export const mealPlanByIdQuery = `
