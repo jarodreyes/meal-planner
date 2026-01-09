@@ -5,18 +5,18 @@ export const nutritionFactsSchema = z.object({
   protein_g: z.number(),
   carbs_g: z.number(),
   fat_g: z.number(),
-  fiber_g: z.number().optional(),
+  fiber_g: z.number().nullable().optional(),
   servingsBasis: z.number(),
   source: z.string(),
 });
 
 export const ingredientLineSchema = z.object({
   originalText: z.string(),
-  nameNormalized: z.string().optional(),
-  quantity: z.string().optional(),
-  unit: z.string().optional(),
-  grams: z.number().optional(),
-  notes: z.string().optional(),
+  nameNormalized: z.string().nullable().optional(),
+  quantity: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
+  grams: z.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 export const recipeSchema = z.object({
