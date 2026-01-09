@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createRequire } from "module";
 import { parseRecipesFromText } from "@/lib/ai";
 import { writeClient } from "@/lib/sanity/client";
 import { nutritionStubFromIngredients } from "@/lib/nutrition";
@@ -7,33 +6,40 @@ import { nutritionStubFromIngredients } from "@/lib/nutrition";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const require = createRequire(import.meta.url);
-
-function resolvePdfParse() {
-  try {
-    const mod = require("pdf-parse");
-    const candidate =
-      (typeof mod === "function" && mod) ||
-      (typeof (mod as any)?.default === "function" && (mod as any).default) ||
-      (typeof (mod as any)?.default?.default === "function" && (mod as any).default.default) ||
-      (typeof (mod as any)?.parse === "function" && (mod as any).parse) ||
-      (typeof (mod as any)?.default?.parse === "function" && (mod as any).default.parse);
-    return candidate || null;
-  } catch (err) {
-    console.error("Failed to require pdf-parse", err);
-    return null;
-  }
-}
-
 async function extractTextFromPdfFile(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const pdfParse = resolvePdfParse();
-  if (!pdfParse) {
-    throw new TypeError("pdf-parse module did not export a function");
+  let PDFParse: any = null;
+
+  try {
+    const mod = await import("pdf-parse");
+    PDFParse =
+      (mod as any)?.PDFParse ||
+      (mod as any)?.default?.PDFParse ||
+      (typeof (mod as any)?.default === "function" ? (mod as any).default : null);
+  } catch (err) {
+    console.error("Failed dynamic import pdf-parse", err);
   }
 
-  const parsed = await pdfParse(buffer);
-  return parsed.text;
+  if (!PDFParse) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require("pdf-parse");
+      PDFParse =
+        (mod as any)?.PDFParse ||
+        (mod as any)?.default?.PDFParse ||
+        (typeof mod === "function" ? mod : null);
+    } catch (err) {
+      console.error("Failed require pdf-parse", err);
+    }
+  }
+
+  if (typeof PDFParse !== "function") {
+    throw new TypeError("pdf-parse module did not export PDFParse class/function");
+  }
+
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  return result.text;
 }
 
 export async function POST(req: Request) {
