@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createRequire } from "module";
 import { parseRecipesFromText } from "@/lib/ai";
 import { writeClient } from "@/lib/sanity/client";
 import { nutritionStubFromIngredients } from "@/lib/nutrition";
@@ -6,18 +7,27 @@ import { nutritionStubFromIngredients } from "@/lib/nutrition";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const require = createRequire(import.meta.url);
+
+function resolvePdfParse() {
+  try {
+    const mod = require("pdf-parse");
+    const candidate =
+      (typeof mod === "function" && mod) ||
+      (typeof (mod as any)?.default === "function" && (mod as any).default) ||
+      (typeof (mod as any)?.default?.default === "function" && (mod as any).default.default) ||
+      (typeof (mod as any)?.parse === "function" && (mod as any).parse) ||
+      (typeof (mod as any)?.default?.parse === "function" && (mod as any).default.parse);
+    return candidate || null;
+  } catch (err) {
+    console.error("Failed to require pdf-parse", err);
+    return null;
+  }
+}
+
 async function extractTextFromPdfFile(file: File) {
   const buffer = Buffer.from(await file.arrayBuffer());
-  const pdfModule = await import("pdf-parse");
-  const pdfParse =
-    typeof pdfModule === "function"
-      ? pdfModule
-      : typeof (pdfModule as any)?.default === "function"
-        ? (pdfModule as any).default
-        : typeof (pdfModule as any)?.default?.default === "function"
-          ? (pdfModule as any).default.default
-          : null;
-
+  const pdfParse = resolvePdfParse();
   if (!pdfParse) {
     throw new TypeError("pdf-parse module did not export a function");
   }
