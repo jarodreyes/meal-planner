@@ -6,12 +6,20 @@ import {
 } from "./zodSchemas";
 import { ingredientNormalizePrompt, recipeParsePrompt } from "./prompts";
 
+const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+function sanitizeText(input: string) {
+  if (!input) return "";
+  // Remove problematic control chars (keep tabs/newlines)
+  return input.replace(CONTROL_CHARS_REGEX, " ");
+}
+
 export async function parseRecipesFromText(params: {
   text: string;
   sourceType: "pdf" | "paste";
   sourceName?: string | null;
 }) {
   const { text, sourceType, sourceName } = params;
+  const cleanText = sanitizeText(text);
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -20,7 +28,7 @@ export async function parseRecipesFromText(params: {
       { role: "system", content: recipeParsePrompt },
       {
         role: "user",
-        content: `Source type: ${sourceType}\nSource name: ${sourceName ?? ""}\n\nRecipe text:\n${text}`,
+        content: `Source type: ${sourceType}\nSource name: ${sourceName ?? ""}\n\nRecipe text:\n${cleanText}`,
       },
     ],
   });
@@ -32,7 +40,7 @@ export async function parseRecipesFromText(params: {
     ...recipe,
     sourceType,
     sourceName: sourceName ?? null,
-    sourceText: text,
+    sourceText: cleanText,
     importStatus:
       recipe.importStatus ??
       (recipe.confidence && recipe.confidence < 0.7 ? "needs_review" : "done"),
