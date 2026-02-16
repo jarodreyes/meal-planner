@@ -7,11 +7,15 @@ type Props = {
 };
 
 export default async function RecipesPage({ searchParams }: Props) {
-  const importStatus = searchParams.importStatus || undefined;
-  const tag = searchParams.tag || undefined;
+  const params = await searchParams;
+  const importStatus = params.importStatus || undefined;
+  const tag = params.tag || undefined;
 
   const recipes =
-    (await readClient.fetch(recipesListQuery, { importStatus, tag })) || [];
+    (await readClient.fetch(recipesListQuery, {
+      importStatus: importStatus ?? null,
+      tag: tag ?? null,
+    })) || [];
 
   return (
     <div className="space-y-6">
@@ -71,6 +75,9 @@ export default async function RecipesPage({ searchParams }: Props) {
               Import: {recipe.importStatus || "n/a"} | Nutrition:{" "}
               {recipe.nutritionStatus || "pending"}
             </p>
+            {recipe.mealType && (
+              <p className="text-xs text-zinc-600">Meal type: {recipe.mealType}</p>
+            )}
             {recipe.tags?.length ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {recipe.tags.map((tag: string) => (

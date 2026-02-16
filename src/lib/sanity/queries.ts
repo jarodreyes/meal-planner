@@ -8,7 +8,8 @@ export const recipesListQuery = `
   importStatus,
   nutritionStatus,
   tags,
-  servings
+  servings,
+  mealType
 }`;
 
 export const recipeByIdQuery = `
@@ -19,6 +20,11 @@ export const recipeByIdQuery = `
   sourceName,
   sourceText,
   servings,
+  mealType,
+  images[] {
+    _key,
+    asset-> { _id, url }
+  },
   ingredients[],
   instructions,
   tags,
@@ -53,4 +59,12 @@ export const mealPlanByIdQuery = `
       nutritionProvided
     }
   }
+}`;
+
+export const recipesNavQuery = `
+*[_type == "recipe"] | order(mealType asc, title asc) {
+  _id,
+  title,
+  mealType,
+  importStatus
 }`;

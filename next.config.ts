@@ -1,12 +1,10 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    /**
-     * pdf-parse ships as CommonJS; mark as external so it can run in the
-     * app router API routes without bundling errors.
-     */
-    serverComponentsExternalPackages: ["pdf-parse"],
+  serverExternalPackages: ["pdf-parse"],
+  turbopack: {
+    root: path.join(__dirname),
   },
 };
 

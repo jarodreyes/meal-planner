@@ -41,6 +41,18 @@ export const ingredientLine = defineType({
       title: "Original Text",
     }),
     defineField({
+      name: "quantityText",
+      type: "string",
+      title: "Quantity (text)",
+      description: "Raw quantity as text, e.g. '1 1/2'",
+    }),
+    defineField({
+      name: "quantityNumber",
+      type: "number",
+      title: "Quantity (number)",
+      description: "Parsed numeric quantity for scaling",
+    }),
+    defineField({
       name: "nameNormalized",
       type: "string",
       title: "Name (normalized)",
@@ -54,6 +66,23 @@ export const ingredientLine = defineType({
       name: "unit",
       type: "string",
       title: "Unit",
+      description: "e.g. cup, tbsp, g, ml, piece",
+      options: {
+        list: [
+          "g",
+          "kg",
+          "ml",
+          "l",
+          "tsp",
+          "tbsp",
+          "cup",
+          "oz",
+          "lb",
+          "piece",
+          "slice",
+          "pinch",
+        ],
+      },
     }),
     defineField({
       name: "grams",
@@ -95,6 +124,18 @@ export const recipe = defineType({
       name: "servings",
       type: "number",
       title: "Servings",
+    }),
+    defineField({
+      name: "mealType",
+      type: "string",
+      title: "Meal Type",
+      options: { list: ["breakfast", "lunch", "dinner", "snack"] },
+    }),
+    defineField({
+      name: "images",
+      title: "Images",
+      type: "array",
+      of: [{ type: "image" }],
     }),
     defineField({
       name: "ingredients",

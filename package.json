@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clear:recipes": "curl -X POST http://localhost:3000/api/admin/clear-recipes"
   },
   "dependencies": {
     "@sanity/client": "^7.14.0",
