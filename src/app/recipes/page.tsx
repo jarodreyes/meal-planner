@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { readClient } from "@/lib/sanity/client";
 import { recipesListQuery } from "@/lib/sanity/queries";
+import { RecipeSearch } from "@/app/components/RecipeSearch";
 
 type Props = {
   searchParams: { importStatus?: string; tag?: string };
@@ -31,6 +32,11 @@ export default async function RecipesPage({ searchParams }: Props) {
           Import recipes
         </Link>
       </div>
+
+      <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <p className="text-sm font-medium text-zinc-700 mb-2">Search recipes</p>
+        <RecipeSearch />
+      </section>
 
       <form className="flex flex-wrap gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
         <label className="flex items-center gap-2 text-sm text-zinc-700">

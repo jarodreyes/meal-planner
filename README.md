@@ -53,6 +53,17 @@ npm run dev
 - `POST /api/meal-plans` — create plan.
 - `PATCH /api/meal-plans/[id]` — append meal entry.
 
+## Recipe search (Algolia)
+- Search on the **Recipes** page uses [Algolia](https://www.algolia.com/) and indexes recipe **titles**, **ingredients**, and **instructions** (see [Sanity + Algolia guide](https://www.sanity.io/docs/developer-guides/how-to-implement-front-end-search-with-sanity)).
+- **Setup:** Create an Algolia app, then set in `.env` / `.env.local`:
+  - `NEXT_PUBLIC_ALGOLIA_APP_ID` — Algolia Application ID
+  - `NEXT_PUBLIC_ALGOLIA_API_KEY` — Search-Only API Key (safe for frontend)
+  - `ALGOLIA_WRITE_KEY` — Write API Key (for sync script and Sanity Function only)
+- **First-time index:** run `npm run algolia:sync` (uses `scripts/algolia-initial-sync.ts` to push all recipes to the `recipes` index).
+- **Ongoing sync (optional):** Deploy the Sanity Function so create/update/delete on recipes update Algolia:
+  - Ensure `sanity.blueprint.ts` and `functions/algolia-recipe-sync` are in the project.
+  - Run `npx sanity blueprints deploy` (requires `ALGOLIA_APP_ID` or `NEXT_PUBLIC_ALGOLIA_APP_ID`, `ALGOLIA_WRITE_KEY`, `SANITY_PROJECT_ID`, `SANITY_DATASET`).
+
 ## Notes
 - `next.config.ts` marks `pdf-parse` as external for App Router APIs.
 - Family multipliers live in `src/lib/nutrition.ts` (`Me 1.0, Wife 0.75, Elliot 0.75, Noah 0.5`).
