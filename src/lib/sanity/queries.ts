@@ -2,6 +2,7 @@ export const recipesListQuery = `
 *[_type == "recipe" 
   && (!defined($importStatus) || $importStatus == null || importStatus == $importStatus)
   && (!defined($tag) || $tag == null || $tag in tags)
+  && (!defined($mealType) || $mealType == null || $mealType == "" || mealType == $mealType)
 ] | order(_createdAt desc) {
   _id,
   title,

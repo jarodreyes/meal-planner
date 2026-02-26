@@ -6,6 +6,24 @@ import { FamilyMacroTable } from "@/components/FamilyMacroTable";
 import { NutritionCard } from "@/components/NutritionCard";
 import { MacroLine, FAMILY_MULTIPLIERS } from "@/lib/nutrition";
 
+function PrintIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 type Props = {
   recipe: any;
   nav: { _id: string; title: string; mealType?: string | null }[];
@@ -39,8 +57,22 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
   const [recipeImages, setRecipeImages] = useState<{ _key?: string; asset?: { _id: string; url?: string } }[]>(
     recipe.images ?? []
   );
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    if (settingsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [settingsOpen]);
 
   useEffect(() => {
     setRecipeImages(recipe.images ?? []);
@@ -339,115 +371,137 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
         </aside>
 
         <div className="space-y-6">
-          <div className="flex flex-wrap justify-between gap-3">
-            <div>
-              <p className="text-sm uppercase tracking-wide text-zinc-500">
-                {recipe.importStatus || "imported"}
-              </p>
-              <h1 className="text-2xl font-semibold text-zinc-900">{recipe.title}</h1>
-              <p className="text-sm text-zinc-600">
-                Source: {recipe.sourceType} {recipe.sourceName ? `• ${recipe.sourceName}` : ""}
-              </p>
-              <p className="text-sm text-zinc-600">
-                Meal type: {mealType || "not set"}
-              </p>
-              <p className="text-sm text-zinc-600">
-                Scaled servings: {scaledServings.toFixed(2)} (base {recipe.servings || 1})
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-zinc-700">
-                Servings
-                <input
-                  type="number"
-                  min={0.25}
-                  step={0.25}
-                  value={servings}
-                  onChange={(e) => setServings(Number(e.target.value))}
-                  className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
-                />
-              </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-700">
-                Baseline (Me)
-                <input
-                  type="number"
-                  min={0.25}
-                  step={0.25}
-                  value={baselineServings}
-                  onChange={(e) => setBaselineServings(Number(e.target.value))}
-                  className="w-24 rounded border border-zinc-300 px-2 py-1 text-sm"
-                />
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-zinc-700">
-                Meal type
-                <select
-                  value={mealType}
-                  onChange={(e) => setMealType(e.target.value)}
-                  className="rounded border border-zinc-300 px-2 py-1 text-sm"
+          {/* Hero: full-width image with title, meal type, and print/settings overlaid */}
+          <div className="relative -mx-4 mt-0 overflow-hidden rounded-none sm:mx-0 sm:rounded-lg">
+            <div
+              className="aspect-[16/10] w-full bg-zinc-200 bg-cover bg-center"
+              style={
+                recipeImages.length > 0 && recipeImages[0]?.asset?.url
+                  ? { backgroundImage: `url(${recipeImages[0].asset.url})` }
+                  : undefined
+              }
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            <div className="absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="rounded-full bg-white/90 p-2 text-zinc-800 shadow hover:bg-white"
+                  title="Print"
                 >
-                  <option value="">Not set</option>
-                  <option value="breakfast">Breakfast</option>
-                  <option value="snack">Snack</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                </select>
-              </label>
-              <button
-                onClick={handleMealTypeSave}
-                disabled={savingMealType}
-                className="rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
-              >
-                {savingMealType ? "Saving…" : "Save meal type"}
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                Print
-              </button>
-              <label className="cursor-pointer rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50">
-                <span>{imageUploading ? "Uploading…" : "Upload image"}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  disabled={imageUploading}
-                  onChange={handleImageUpload}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="rounded border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Delete recipe"}
-              </button>
+                  <PrintIcon className="h-5 w-5" />
+                </button>
+                <div className="relative" ref={settingsRef}>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen((o) => !o)}
+                    className="rounded-full bg-white/90 p-2 text-zinc-800 shadow hover:bg-white"
+                    title="Recipe settings"
+                  >
+                    <SettingsIcon className="h-5 w-5" />
+                  </button>
+                  {settingsOpen && (
+                    <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-zinc-200 bg-white p-4 shadow-lg">
+                      <p className="mb-3 text-xs font-semibold uppercase text-zinc-500">Settings for this recipe</p>
+                      <div className="space-y-3">
+                        <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
+                          Servings
+                          <input
+                            type="number"
+                            min={0.25}
+                            step={0.25}
+                            value={servings}
+                            onChange={(e) => setServings(Number(e.target.value))}
+                            className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
+                          />
+                        </label>
+                        <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
+                          Baseline (Me)
+                          <input
+                            type="number"
+                            min={0.25}
+                            step={0.25}
+                            value={baselineServings}
+                            onChange={(e) => setBaselineServings(Number(e.target.value))}
+                            className="w-24 rounded border border-zinc-300 px-2 py-1 text-sm"
+                          />
+                        </label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm text-zinc-700">
+                            Meal type
+                            <select
+                              value={mealType}
+                              onChange={(e) => setMealType(e.target.value)}
+                              className="rounded border border-zinc-300 px-2 py-1 text-sm"
+                            >
+                              <option value="">Not set</option>
+                              <option value="breakfast">Breakfast</option>
+                              <option value="snack">Snack</option>
+                              <option value="lunch">Lunch</option>
+                              <option value="dinner">Dinner</option>
+                            </select>
+                          </label>
+                          <button
+                            onClick={handleMealTypeSave}
+                            disabled={savingMealType}
+                            className="rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                          >
+                            {savingMealType ? "Saving…" : "Save meal type"}
+                          </button>
+                        </div>
+                        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700">
+                          <span>{imageUploading ? "Uploading…" : "Upload image"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={imageUploading}
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsOpen(false);
+                            handleDelete();
+                          }}
+                          disabled={deleting}
+                          className="rounded border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          {deleting ? "Deleting…" : "Delete recipe"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wide text-white/90">
+                  {mealType ? String(mealType) : "Recipe"}
+                </p>
+                <h1 className="mt-1 text-2xl font-semibold text-white drop-shadow sm:text-3xl">
+                  {recipe.title}
+                </h1>
+              </div>
             </div>
           </div>
 
-          {recipeImages.length > 0 && (
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-zinc-800 mb-2">Photos</h2>
-              <div className="flex flex-wrap gap-3">
-                {recipeImages.map((img, idx) => (
+          {recipeImages.length > 1 && (
+            <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm">
+              <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">More photos</p>
+              <div className="flex flex-wrap gap-2">
+                {recipeImages.slice(1).map((img, idx) => (
                   <img
                     key={img._key ?? img.asset?._id ?? idx}
                     src={img.asset?.url}
                     alt=""
-                    className="h-32 w-auto rounded object-cover"
+                    className="h-24 w-auto rounded object-cover"
                   />
                 ))}
               </div>
             </div>
           )}
-
-          {status && <p className="text-sm text-zinc-600">{status}</p>}
 
           <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
             <p className="text-sm font-semibold text-zinc-800">Who is eating?</p>

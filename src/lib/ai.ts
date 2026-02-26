@@ -22,6 +22,9 @@ const MEAL_HEADER_MAP: Record<string, "breakfast" | "lunch" | "dinner" | "snack"
   dinner: "dinner",
 };
 
+/** Max characters per API call to avoid truncation and stay within output limits (recipes later in doc were dropped) */
+const MAX_CHARS_PER_CHUNK = 28_000;
+
 function detectMealHeaders(text: string) {
   const lines = text.split(/\r?\n/);
   const hits: { header: string; mealType: string; line: number }[] = [];
@@ -35,6 +38,57 @@ function detectMealHeaders(text: string) {
     });
   });
   return hits;
+}
+
+type TextSegment = { mealType: "breakfast" | "lunch" | "dinner" | "snack"; text: string };
+
+/**
+ * Split document by meal section headers so each chunk is processed separately with the correct mealType.
+ * Returns [] when there are no headers (caller uses single-call inference).
+ */
+function segmentTextByMealSections(cleanText: string): TextSegment[] {
+  const lines = cleanText.split(/\r?\n/);
+  const headers = detectMealHeaders(cleanText);
+  if (headers.length === 0) {
+    return [];
+  }
+
+  const segments: TextSegment[] = [];
+  for (let i = 0; i < headers.length; i++) {
+    const startLine = headers[i].line;
+    const endLine = i + 1 < headers.length ? headers[i + 1].line : lines.length;
+    const segmentLines = lines.slice(startLine, endLine);
+    const text = segmentLines.join("\n").trim();
+    if (!text) continue;
+    const mealType = headers[i].mealType as TextSegment["mealType"];
+    segments.push({ mealType, text });
+  }
+  return segments;
+}
+
+/**
+ * Split a segment into smaller chunks if it exceeds MAX_CHARS_PER_CHUNK (same mealType for all).
+ */
+function splitSegmentBySize(
+  segment: TextSegment
+): TextSegment[] {
+  if (segment.text.length <= MAX_CHARS_PER_CHUNK) {
+    return [segment];
+  }
+  const chunks: TextSegment[] = [];
+  const lines = segment.text.split(/\r?\n/);
+  let current = "";
+  for (const line of lines) {
+    if (current.length + line.length + 1 > MAX_CHARS_PER_CHUNK && current.length > 0) {
+      chunks.push({ mealType: segment.mealType, text: current.trim() });
+      current = "";
+    }
+    current += (current ? "\n" : "") + line;
+  }
+  if (current.trim()) {
+    chunks.push({ mealType: segment.mealType, text: current.trim() });
+  }
+  return chunks;
 }
 
 export async function parseRecipesFromText(params: {
@@ -54,22 +108,63 @@ export async function parseRecipesFromText(params: {
           .join(" | ")
       : "none";
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: recipeParsePrompt },
-      {
-        role: "user",
-        content: `Source type: ${sourceType}\nSource name: ${sourceName ?? ""}\nDetected meal section hints: ${headerHints}\n\nRecipe text:\n${cleanText}\n\nImages (data URLs or URLs, optional): ${images?.slice(0, 5).join(", ") ?? "none"}`,
-      },
-    ],
-  });
+  const segments = segmentTextByMealSections(cleanText);
+  const chunks: TextSegment[] = [];
+  if (segments.length > 0) {
+    for (const seg of segments) {
+      chunks.push(...splitSegmentBySize(seg));
+    }
+  }
 
-  const raw = completion.choices[0].message?.content || "{}";
-  const parsed = parsedRecipesSchema.parse(JSON.parse(raw));
+  async function parseOneChunk(
+    chunkText: string,
+    forcedMealType?: "breakfast" | "lunch" | "dinner" | "snack"
+  ) {
+    const mealInstruction = forcedMealType
+      ? `\n\nThis section is ${forcedMealType}. Set mealType to "${forcedMealType}" for every recipe in your response.`
+      : "";
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: recipeParsePrompt },
+        {
+          role: "user",
+          content: `Source type: ${sourceType}\nSource name: ${sourceName ?? ""}\nDetected meal section hints: ${headerHints}${mealInstruction}\n\nRecipe text:\n${chunkText}\n\nImages (data URLs or URLs, optional): ${images?.slice(0, 5).join(", ") ?? "none"}`,
+        },
+      ],
+    });
 
-  return parsed.recipes.map((recipe) => ({
+    const raw = completion.choices[0].message?.content || "{}";
+    const parsed = parsedRecipesSchema.parse(JSON.parse(raw));
+    return parsed.recipes.map((recipe) => ({
+      ...recipe,
+      mealType: forcedMealType ?? recipe.mealType,
+    }));
+  }
+
+  let allRecipes: Array<{
+    mealType?: "breakfast" | "lunch" | "dinner" | "snack" | null;
+    title?: string | null;
+    sourceType?: string;
+    sourceName?: string | null;
+    sourceText?: string;
+    images?: string[] | null;
+    importStatus?: string;
+    nutritionStatus?: string;
+    [k: string]: unknown;
+  }>;
+
+  if (chunks.length > 0) {
+    const results = await Promise.all(
+      chunks.map((c) => parseOneChunk(c.text, c.mealType))
+    );
+    allRecipes = results.flat();
+  } else {
+    allRecipes = await parseOneChunk(cleanText);
+  }
+
+  return allRecipes.map((recipe) => ({
     ...recipe,
     title: recipe.title || "Untitled recipe",
     sourceType,

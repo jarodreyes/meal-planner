@@ -13,14 +13,24 @@ npm install
 
 3) Set env vars (e.g. in `.env.local`)
 ```
+# Required for app + Studio
 SANITY_PROJECT_ID=your_project_id
 SANITY_DATASET=production
 SANITY_API_TOKEN=your_sanity_token
 OPENAI_API_KEY=your_openai_key
 
-# Also expose for the browser (Studio and client queries)
+# Expose for browser (Studio and client queries)
 NEXT_PUBLIC_SANITY_PROJECT_ID=your_project_id
 NEXT_PUBLIC_SANITY_DATASET=production
+
+# Optional – Recipe search (Algolia)
+NEXT_PUBLIC_ALGOLIA_APP_ID=your_algolia_app_id
+NEXT_PUBLIC_ALGOLIA_API_KEY=your_algolia_search_only_key
+ALGOLIA_APP_ID=your_algolia_app_id
+ALGOLIA_WRITE_KEY=your_algolia_write_key
+
+# Optional – Recipe image generation (Agent Actions)
+SANITY_SCHEMA_ID=your_schema_id
 ```
 
 4) Run the app + Studio
@@ -62,7 +72,16 @@ npm run dev
 - **First-time index:** run `npm run algolia:sync` (uses `scripts/algolia-initial-sync.ts` to push all recipes to the `recipes` index).
 - **Ongoing sync (optional):** Deploy the Sanity Function so create/update/delete on recipes update Algolia:
   - Ensure `sanity.blueprint.ts` and `functions/algolia-recipe-sync` are in the project.
-  - Run `npx sanity blueprints deploy` (requires `ALGOLIA_APP_ID` or `NEXT_PUBLIC_ALGOLIA_APP_ID`, `ALGOLIA_WRITE_KEY`, `SANITY_PROJECT_ID`, `SANITY_DATASET`).
+  - Run `npx sanity blueprints deploy`. Required env: `ALGOLIA_APP_ID` or `NEXT_PUBLIC_ALGOLIA_APP_ID`, `ALGOLIA_WRITE_KEY`, `SANITY_PROJECT_ID` or `NEXT_PUBLIC_SANITY_PROJECT_ID`, `SANITY_DATASET` or `NEXT_PUBLIC_SANITY_DATASET`. `SANITY_API_TOKEN` is required if the CLI needs to authenticate to deploy.
+
+## Recipe images (Sanity Agent Actions / MCP)
+- You can generate one image per recipe using the [Sanity MCP server](https://www.sanity.io/docs/ai/mcp-server) **`generate_image`** tool, or the same backend via script.
+- **Option A – MCP in Cursor:** With [Sanity MCP configured](https://www.sanity.io/docs/ai/mcp-server#cursor), ask the AI to “generate an image for recipe document X” using the `generate_image` tool (documentId = recipe `_id`, target = recipe `images` field).
+- **Option B – Script:** Run `npm run recipes:generate-images` to queue image generation for all recipes that have no images. Prerequisites:
+  - Get a schema id: `npx sanity schema deploy --verbose` or `npx sanity schema list`.
+  - Set `SANITY_SCHEMA_ID` and `SANITY_API_TOKEN` in `.env.local`.
+- Generation is asynchronous; new images appear in Studio once the job completes.
+- **Publishing:** The app reads **published** content only. Generation writes to **drafts**. To show images on the site, publish each recipe in Studio (Publish button) or run `npm run recipes:publish-drafts` after generation has finished.
 
 ## Notes
 - `next.config.ts` marks `pdf-parse` as external for App Router APIs.

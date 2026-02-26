@@ -34,6 +34,9 @@ async function importPdf(filePath) {
   const form = new FormData();
   form.append("sourceType", "pdf");
   form.append("files", new Blob([buf], { type: "application/pdf" }), path.basename(filePath));
+  // Only import Lunch and Dinner (skip Breakfast and Snack)
+  form.append("mealTypes", "lunch");
+  form.append("mealTypes", "dinner");
 
   const res = await fetch(IMPORT_URL, {
     method: "POST",

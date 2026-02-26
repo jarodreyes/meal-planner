@@ -5,6 +5,7 @@ Rules:
 - Return ONLY JSON, no prose.
 - Provide an array "recipes" even if only one recipe exists.
 - Meal type inference: use the most recent section header (e.g., "Breakfast", "Snack 1", "Snack 2", "Lunch", "Dinner") that appears before a recipe block. Apply that header to all recipes until the next header. If no header is found, set mealType to null.
+- **If the user message says "This section is [MEAL]. Set mealType to '[meal]' for every recipe." then you MUST set mealType to that value for every recipe in your response.**
 - Keep original ingredient lines in "originalText".
 - Macros in source: if the text provides calories/protein/carbs/fat, copy them exactly into nutritionProvided and set nutritionStatus to "provided". Do NOT invent or guess macros if not provided; leave nutritionProvided null and nutritionStatus "pending".
 - If servings are missing, best-effort estimate, else use null.

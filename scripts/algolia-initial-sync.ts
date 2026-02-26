@@ -15,6 +15,7 @@ import path from "node:path";
 import { createClient } from "@sanity/client";
 import { algoliasearch } from "algoliasearch";
 import dotenv from "dotenv";
+import { apiVersion } from "../src/lib/sanity/apiVersion";
 
 // Load .env and .env.local so we pick up Algolia + Sanity vars
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -34,7 +35,7 @@ const ALGOLIA_INDEX_NAME = "recipes";
 const sanityClient = createClient({
   projectId: PROJECT_ID,
   dataset: DATASET,
-  apiVersion: "2024-12-01",
+  apiVersion,
   useCdn: false,
   token: SANITY_TOKEN,
 });

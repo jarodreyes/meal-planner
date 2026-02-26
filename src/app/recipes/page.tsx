@@ -4,18 +4,20 @@ import { recipesListQuery } from "@/lib/sanity/queries";
 import { RecipeSearch } from "@/app/components/RecipeSearch";
 
 type Props = {
-  searchParams: { importStatus?: string; tag?: string };
+  searchParams: { importStatus?: string; tag?: string; mealType?: string };
 };
 
 export default async function RecipesPage({ searchParams }: Props) {
   const params = await searchParams;
   const importStatus = params.importStatus || undefined;
   const tag = params.tag || undefined;
+  const mealType = params.mealType || undefined;
 
   const recipes =
     (await readClient.fetch(recipesListQuery, {
       importStatus: importStatus ?? null,
       tag: tag ?? null,
+      mealType: mealType ?? null,
     })) || [];
 
   return (
@@ -39,6 +41,20 @@ export default async function RecipesPage({ searchParams }: Props) {
       </section>
 
       <form className="flex flex-wrap gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <label className="flex items-center gap-2 text-sm text-zinc-700">
+          Meal type
+          <select
+            name="mealType"
+            defaultValue={mealType ?? ""}
+            className="rounded border border-zinc-300 px-2 py-1 text-sm"
+          >
+            <option value="">Any</option>
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner">Dinner</option>
+            <option value="snack">Snack</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-sm text-zinc-700">
           Import status
           <select

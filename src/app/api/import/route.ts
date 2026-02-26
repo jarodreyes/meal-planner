@@ -129,6 +129,11 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const sourceType = (form.get("sourceType") as "pdf" | "paste") || "paste";
     const sourceName = (form.get("sourceName") as string) || undefined;
+    const mealTypesRaw = form.getAll("mealTypes");
+    const allowedMealTypes: Set<string> =
+      mealTypesRaw.length > 0
+        ? new Set(mealTypesRaw.map((v) => String(v).toLowerCase()))
+        : new Set();
 
     const payloads: { text: string; sourceName?: string | null; images?: string[]; fileName?: string }[] = [];
 
@@ -182,6 +187,22 @@ export async function POST(req: Request) {
             });
             skippedCount++;
             continue;
+          }
+
+          // Skip meal types not selected for import
+          if (allowedMealTypes.size > 0) {
+            const recipeMeal = (recipe.mealType ?? "").toLowerCase();
+            if (!recipeMeal || !allowedMealTypes.has(recipeMeal)) {
+              results.push({
+                skipped: true,
+                reason: "Meal type not selected for import",
+                title: recipe.title ?? "Untitled",
+                mealType: recipe.mealType ?? null,
+                source: payload.fileName ?? payload.sourceName ?? "upload",
+              });
+              skippedCount++;
+              continue;
+            }
           }
 
           const mappedIngredients =

@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 
+const MEAL_TYPES = [
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "snack", label: "Snack" },
+] as const;
+
 export default function ImportPage() {
   const [sourceType, setSourceType] = useState<"pdf" | "paste">("pdf");
   const [text, setText] = useState("");
   const [sourceName, setSourceName] = useState("");
+  const [mealTypes, setMealTypes] = useState<Set<string>>(new Set(["lunch", "dinner"]));
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -14,6 +22,15 @@ export default function ImportPage() {
   );
   const [fileCount, setFileCount] = useState(0);
   const [doneCount, setDoneCount] = useState(0);
+
+  const toggleMealType = (value: string) => {
+    setMealTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,6 +43,7 @@ export default function ImportPage() {
     const formData = new FormData(e.currentTarget);
     formData.set("sourceType", sourceType);
     formData.set("sourceName", sourceName);
+    mealTypes.forEach((m) => formData.append("mealTypes", m));
     if (sourceType === "paste") {
       formData.set("text", text);
     }
@@ -109,6 +127,26 @@ export default function ImportPage() {
             className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
           />
         </label>
+
+        <div className="block text-sm text-zinc-700">
+          <p className="mb-2">Import meal types (uncheck to skip)</p>
+          <div className="flex flex-wrap gap-4">
+            {MEAL_TYPES.map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={mealTypes.has(value)}
+                  onChange={() => toggleMealType(value)}
+                  className="rounded border-zinc-300"
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            Only recipes in the selected sections will be imported. Default: Lunch and Dinner.
+          </p>
+        </div>
 
         {sourceType === "pdf" ? (
           <div className="block text-sm text-zinc-700">

@@ -15,6 +15,7 @@ import process from "node:process";
 import path from "node:path";
 import { createClient } from "@sanity/client";
 import dotenv from "dotenv";
+import { apiVersion } from "../src/lib/sanity/apiVersion";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -28,7 +29,7 @@ const SANITY_TOKEN = process.env.SANITY_API_TOKEN || undefined;
 const client = createClient({
   projectId: PROJECT_ID,
   dataset: DATASET,
-  apiVersion: "2024-12-01",
+  apiVersion,
   useCdn: false,
   token: SANITY_TOKEN,
 });

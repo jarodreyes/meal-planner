@@ -1,4 +1,5 @@
 import { createClient } from "@sanity/client";
+import { apiVersion } from "./apiVersion";
 
 const projectId =
   process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || process.env.SANITY_PROJECT_ID || "";
@@ -8,8 +9,6 @@ const dataset =
 if (!projectId || !dataset) {
   console.warn("SANITY projectId or dataset is not set. Check your env variables.");
 }
-
-const apiVersion = "2024-12-01";
 
 export const readClient = createClient({
   projectId,
@@ -26,3 +25,5 @@ export const writeClient = createClient({
   token: process.env.SANITY_API_TOKEN,
   useCdn: false,
 });
+
+export { apiVersion, agentActionsApiVersion } from "./apiVersion";
