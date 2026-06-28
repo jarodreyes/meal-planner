@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeClient } from "@/lib/sanity/client";
-import { parseRecipesFromText } from "@/lib/ai";
+import { enrichImportedRecipe, parseRecipesFromText } from "@/lib/ai";
 import { nutritionStubFromIngredients } from "@/lib/nutrition";
 import { unitAliases } from "@/lib/units";
 import { execSync } from "child_process";
@@ -189,13 +189,14 @@ export async function POST(req: Request) {
             continue;
           }
 
-          // Skip meal types not selected for import
+          // Skip only when the parser assigned a meal type that is not in the user's selection.
+          // Unknown/null mealType still imports (enrichment may fill it later).
           if (allowedMealTypes.size > 0) {
             const recipeMeal = (recipe.mealType ?? "").toLowerCase();
-            if (!recipeMeal || !allowedMealTypes.has(recipeMeal)) {
+            if (recipeMeal && !allowedMealTypes.has(recipeMeal)) {
               results.push({
                 skipped: true,
-                reason: "Meal type not selected for import",
+                reason: `Meal type "${recipe.mealType}" not selected for import`,
                 title: recipe.title ?? "Untitled",
                 mealType: recipe.mealType ?? null,
                 source: payload.fileName ?? payload.sourceName ?? "upload",
@@ -205,7 +206,24 @@ export async function POST(req: Request) {
             }
           }
 
-          const mappedIngredients =
+          const enrichment = await enrichImportedRecipe({
+            title: recipe.title ?? "Untitled recipe",
+            ingredients: recipe.ingredients ?? [],
+            instructions: recipe.instructions ?? [],
+            servings: recipe.servings,
+            mealType: recipe.mealType,
+            tags: recipe.tags ?? [],
+            sourceName: recipe.sourceName,
+            nutritionProvided: recipe.nutritionProvided ?? null,
+          });
+
+          const mergedServings = enrichment.servings ?? recipe.servings ?? 1;
+          const mergedMealType = enrichment.mealType ?? recipe.mealType ?? null;
+          const mergedTags =
+            (recipe.tags?.length ?? 0) > 0 ? recipe.tags! : (enrichment.tags ?? []);
+          const mergedSourceName = recipe.sourceName ?? enrichment.sourceName ?? undefined;
+
+          let mappedIngredients =
             (recipe.ingredients || []).map((ing: any) => {
               const quantityText = ing.quantity ?? ing.quantityText ?? null;
               const quantityNumber =
@@ -219,18 +237,32 @@ export async function POST(req: Request) {
               };
             }) || [];
 
+          if (enrichment.ingredientEnrichments?.length) {
+            mappedIngredients = mappedIngredients.map((ing: any) => {
+              const patch = enrichment.ingredientEnrichments!.find(
+                (e) => e.originalText === ing.originalText
+              );
+              if (!patch) return ing;
+              return {
+                ...ing,
+                nameNormalized: patch.nameNormalized ?? ing.nameNormalized,
+                grams: patch.grams ?? ing.grams,
+              };
+            });
+          }
+
           const baseDoc = {
             _type: "recipe",
             title: recipe.title,
             sourceType: recipe.sourceType,
-            sourceName: recipe.sourceName,
+            sourceName: mergedSourceName,
             sourceText: recipe.sourceText,
-            servings: recipe.servings ?? 1,
-            mealType: recipe.mealType ?? null,
+            servings: mergedServings,
+            mealType: mergedMealType,
             images: recipe.images ?? [],
             ingredients: mappedIngredients,
             instructions: recipe.instructions ?? [],
-            tags: recipe.tags ?? [],
+            tags: mergedTags,
             importStatus: recipe.importStatus,
             nutritionProvided: recipe.nutritionProvided ?? undefined,
             nutritionStatus:
@@ -242,10 +274,22 @@ export async function POST(req: Request) {
           let nutritionComputed = recipe.nutritionComputed;
 
           if (!recipe.nutritionProvided) {
-            nutritionComputed = nutritionStubFromIngredients(
-              recipe.ingredients,
-              recipe.servings ?? 1
-            );
+            if (enrichment.nutritionComputed) {
+              nutritionComputed = {
+                calories: enrichment.nutritionComputed.calories,
+                protein_g: enrichment.nutritionComputed.protein_g,
+                carbs_g: enrichment.nutritionComputed.carbs_g,
+                fat_g: enrichment.nutritionComputed.fat_g,
+                fiber_g: enrichment.nutritionComputed.fiber_g ?? undefined,
+                servingsBasis: enrichment.nutritionComputed.servingsBasis,
+                source: "openai_estimate",
+              };
+            } else {
+              nutritionComputed = nutritionStubFromIngredients(
+                mappedIngredients,
+                mergedServings
+              );
+            }
 
             await writeClient
               .patch(created._id)

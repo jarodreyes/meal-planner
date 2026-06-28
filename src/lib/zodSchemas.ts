@@ -24,7 +24,8 @@ export const ingredientLineSchema = z.object({
 export const recipeSchema = z.object({
   title: z.string().optional().nullable().default("Untitled recipe"),
   sourceType: z.enum(["pdf", "paste"]),
-  sourceName: z.string().optional(),
+  /** Model often returns null when unknown; prompt allows null */
+  sourceName: z.string().nullable().optional(),
   sourceText: z.string(),
   servings: z.number().positive().nullish().default(1),
   mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]).nullable().optional(),
@@ -35,7 +36,8 @@ export const recipeSchema = z.object({
   importStatus: z
     .enum(["new", "processing", "needs_review", "failed", "done"])
     .default("done"),
-  nutritionProvided: nutritionFactsSchema.optional(),
+  /** Prompt says use null when macros are not in the source */
+  nutritionProvided: nutritionFactsSchema.nullable().optional(),
   nutritionComputed: nutritionFactsSchema.optional(),
   nutritionStatus: z
     .enum(["pending", "provided", "computed", "failed", "needs_review"])
@@ -63,3 +65,32 @@ export const normalizedIngredientsSchema = z.object({
     })
   ),
 });
+
+/** OpenAI import enrichment (missing macros + metadata); source is applied in code */
+export const recipeEnrichmentResponseSchema = z.object({
+  nutritionComputed: z
+    .object({
+      calories: z.number(),
+      protein_g: z.number(),
+      carbs_g: z.number(),
+      fat_g: z.number(),
+      fiber_g: z.number().nullable().optional(),
+      servingsBasis: z.number().positive(),
+    })
+    .optional(),
+  servings: z.number().positive().optional(),
+  mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+  tags: z.array(z.string()).optional(),
+  sourceName: z.string().nullable().optional(),
+  ingredientEnrichments: z
+    .array(
+      z.object({
+        originalText: z.string(),
+        nameNormalized: z.string().optional(),
+        grams: z.number().optional(),
+      })
+    )
+    .optional(),
+});
+
+export type RecipeEnrichment = z.infer<typeof recipeEnrichmentResponseSchema>;

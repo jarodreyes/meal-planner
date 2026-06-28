@@ -3,8 +3,14 @@ import {
   normalizedIngredientsSchema,
   parsedRecipesSchema,
   ParsedRecipe,
+  recipeEnrichmentResponseSchema,
 } from "./zodSchemas";
-import { cookedWeightPrompt, ingredientNormalizePrompt, recipeParsePrompt } from "./prompts";
+import {
+  cookedWeightPrompt,
+  ingredientNormalizePrompt,
+  recipeEnrichmentPrompt,
+  recipeParsePrompt,
+} from "./prompts";
 
 const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 function sanitizeText(input: string) {
@@ -176,6 +182,57 @@ export async function parseRecipesFromText(params: {
       (recipe.confidence && recipe.confidence < 0.7 ? "needs_review" : "done"),
     nutritionStatus: recipe.nutritionProvided ? "provided" : "pending",
   }));
+}
+
+/**
+ * Second pass: estimate macros and fill missing metadata (servings, mealType, tags, etc.)
+ * when the parse left gaps. Safe to call on every imported recipe.
+ */
+export async function enrichImportedRecipe(recipe: {
+  title: string;
+  ingredients: ParsedRecipe["ingredients"];
+  instructions: string[];
+  servings: number | null | undefined;
+  mealType: ParsedRecipe["mealType"];
+  tags: string[];
+  sourceName: string | null | undefined;
+  nutritionProvided: ParsedRecipe["nutritionProvided"];
+}) {
+  const needsNutrition = !recipe.nutritionProvided;
+
+  const payload = {
+    needsNutrition,
+    title: recipe.title,
+    servings: recipe.servings ?? null,
+    mealType: recipe.mealType ?? null,
+    tags: recipe.tags ?? [],
+    sourceName: recipe.sourceName ?? null,
+    nutritionProvided: recipe.nutritionProvided ?? null,
+    ingredients: recipe.ingredients,
+    instructions: recipe.instructions,
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: recipeEnrichmentPrompt },
+        { role: "user", content: JSON.stringify(payload) },
+      ],
+    });
+
+    const raw = completion.choices[0].message?.content || "{}";
+    const parsed = recipeEnrichmentResponseSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
+      console.error("enrichImportedRecipe: invalid JSON", parsed.error.flatten());
+      return {};
+    }
+    return parsed.data;
+  } catch (e) {
+    console.error("enrichImportedRecipe failed", e);
+    return {};
+  }
 }
 
 export async function normalizeIngredients(

@@ -13,7 +13,9 @@ export default function ImportPage() {
   const [sourceType, setSourceType] = useState<"pdf" | "paste">("pdf");
   const [text, setText] = useState("");
   const [sourceName, setSourceName] = useState("");
-  const [mealTypes, setMealTypes] = useState<Set<string>>(new Set(["lunch", "dinner"]));
+  const [mealTypes, setMealTypes] = useState<Set<string>>(
+    () => new Set(MEAL_TYPES.map((m) => m.value))
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,7 +146,8 @@ export default function ImportPage() {
             ))}
           </div>
           <p className="mt-1 text-xs text-zinc-500">
-            Only recipes in the selected sections will be imported. Default: Lunch and Dinner.
+            Uncheck meal types to exclude them (e.g. import only lunch from a multi-section PDF).
+            Default: all types included.
           </p>
         </div>
 
@@ -228,6 +231,13 @@ export default function ImportPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   {r.error ? (
                     <span className="text-red-600">Error: {r.details || r.error}</span>
+                  ) : r.skipped ? (
+                    <span className="text-amber-800">
+                      Skipped: <span className="font-medium">{r.reason || "—"}</span>
+                      {r.title != null && (
+                        <span className="font-semibold text-zinc-900"> ({r.title})</span>
+                      )}
+                    </span>
                   ) : (
                     <>
                       <span className="font-semibold">{r.title}</span>

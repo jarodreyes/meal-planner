@@ -7,7 +7,7 @@ Rules:
 - Meal type inference: use the most recent section header (e.g., "Breakfast", "Snack 1", "Snack 2", "Lunch", "Dinner") that appears before a recipe block. Apply that header to all recipes until the next header. If no header is found, set mealType to null.
 - **If the user message says "This section is [MEAL]. Set mealType to '[meal]' for every recipe." then you MUST set mealType to that value for every recipe in your response.**
 - Keep original ingredient lines in "originalText".
-- Macros in source: if the text provides calories/protein/carbs/fat, copy them exactly into nutritionProvided and set nutritionStatus to "provided". Do NOT invent or guess macros if not provided; leave nutritionProvided null and nutritionStatus "pending".
+- Macros in source: if the text provides calories/protein/carbs/fat, copy them exactly into nutritionProvided and set nutritionStatus to "provided". If the source does not list macros, set nutritionProvided to null (they will be estimated in a later automated step—do not guess in this parse).
 - If servings are missing, best-effort estimate, else use null.
 - If macros are present in the text, include them under nutritionProvided with servingsBasis.
 - Confidence is between 0 and 1 for how correct the parse is.
@@ -70,6 +70,22 @@ Guidance:
 - Use common sense estimates when units are ambiguous.
 - Prefer edible portion weights.
 - If unknown, set grams to 0 but still provide nameNormalized.
+`;
+
+export const recipeEnrichmentPrompt = `
+You fill gaps in recipe metadata using culinary and nutrition knowledge. You receive one JSON object per request. Return ONLY JSON, no markdown or prose.
+
+Rules:
+- If "needsNutrition" is true (no macros from the original source), you MUST estimate total calories, protein_g, carbs_g, fat_g, and optionally fiber_g for the full recipe as written—totals for all servings in the dish, not per serving unless the recipe clearly states per-serving macros. Set "servingsBasis" to the number of servings the totals correspond to (use the "servings" field; if unclear, use 1). Round macros to whole numbers; be realistic.
+- If "needsNutrition" is false, omit the "nutritionComputed" key entirely (keep source-provided macros untouched).
+- Include other keys only when filling missing or clearly empty values:
+  - "servings": positive number only if the input is null, zero, or implausible for the ingredient list.
+  - "mealType": only if input is null or cannot be inferred from context.
+  - "tags": only if input tags are empty or useless; suggest 2–6 short lowercase tags (e.g. "meal-prep", "high-protein").
+  - "sourceName": only if input is null/empty and you can infer a short label (e.g. cookbook or section name).
+  - "ingredientEnrichments": optional array of { "originalText": string (must match an ingredient line exactly), "nameNormalized": string?, "grams": number? } for lines missing a normalized name or gram estimate where you can reasonably infer them.
+
+Never contradict explicit numbers in "nutritionProvided" when it is present. If unsure, omit optional fields.
 `;
 
 export const cookedWeightPrompt = `
