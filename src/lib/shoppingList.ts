@@ -1,3 +1,5 @@
+import { sumFamilyMultipliers } from "./nutrition";
+
 export type ShoppingIngredient = {
   originalText?: string | null;
   quantityText?: string | null;
@@ -10,6 +12,7 @@ export type ShoppingIngredient = {
 
 export type ShoppingPlanMeal = {
   baselineServingsForMe?: number | null;
+  eaters?: string[] | null;
   recipe?: {
     title?: string | null;
     servings?: number | null;
@@ -55,11 +58,16 @@ export function buildShoppingList(meals: ShoppingPlanMeal[]): ShoppingListItem[]
     if (!recipe?.ingredients?.length) continue;
 
     const baseServings = recipe.servings && recipe.servings > 0 ? recipe.servings : null;
-    const wanted =
+    const myServing =
       meal.baselineServingsForMe && meal.baselineServingsForMe > 0
         ? meal.baselineServingsForMe
-        : null;
-    const factor = baseServings && wanted ? wanted / baseServings : 1;
+        : 1;
+    // Total servings to cook = my serving size x everyone eating. When no eaters
+    // were recorded (older meals), fall back to my serving size alone.
+    const wanted = meal.eaters && meal.eaters.length
+      ? myServing * sumFamilyMultipliers(meal.eaters)
+      : myServing;
+    const factor = baseServings ? wanted / baseServings : 1;
     const recipeTitle = recipe.title?.trim() || "Untitled recipe";
 
     for (const ing of recipe.ingredients) {

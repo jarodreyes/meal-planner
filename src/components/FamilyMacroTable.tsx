@@ -3,6 +3,8 @@ import { MacroLine, computeFamilyServingTable } from "@/lib/nutrition";
 type Props = {
   macros: MacroLine | null | undefined;
   baselineServings: number;
+  /** When provided, only these people are shown. Defaults to the whole family. */
+  people?: string[];
 };
 
 const AVATAR_COLORS: Record<string, string> = {
@@ -12,7 +14,7 @@ const AVATAR_COLORS: Record<string, string> = {
   Noah: "bg-fat",
 };
 
-export function FamilyMacroTable({ macros, baselineServings }: Props) {
+export function FamilyMacroTable({ macros, baselineServings, people }: Props) {
   if (!macros) {
     return (
       <div className="rounded-card bg-white p-5 text-sm text-zinc-500 shadow-sm">
@@ -21,7 +23,11 @@ export function FamilyMacroTable({ macros, baselineServings }: Props) {
     );
   }
 
-  const rows = computeFamilyServingTable(macros, baselineServings);
+  const allRows = computeFamilyServingTable(macros, baselineServings);
+  const rows =
+    people && people.length
+      ? allRows.filter((r) => people.includes(r.person))
+      : allRows;
 
   return (
     <div className="rounded-card bg-white p-5 shadow-sm">

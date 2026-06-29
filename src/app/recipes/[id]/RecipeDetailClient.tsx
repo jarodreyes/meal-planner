@@ -5,10 +5,30 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FamilyMacroTable } from "@/components/FamilyMacroTable";
 import { NutritionCard } from "@/components/NutritionCard";
-import { MacroLine, FAMILY_MULTIPLIERS, scaleMacrosForServings } from "@/lib/nutrition";
+import { MacroLine, FAMILY_MULTIPLIERS, FAMILY_MEMBERS, scaleMacrosForServings } from "@/lib/nutrition";
 import { FavoriteButton } from "@/app/components/FavoriteButton";
 import { AddToMealPlan } from "@/app/components/AddToMealPlan";
 import { gradientForMealType } from "@/lib/mealTypes";
+
+// Common unicode vulgar fractions found in pasted/imported recipe text.
+const UNICODE_FRACTIONS: Record<string, number> = {
+  "½": 0.5,
+  "⅓": 1 / 3,
+  "⅔": 2 / 3,
+  "¼": 0.25,
+  "¾": 0.75,
+  "⅕": 0.2,
+  "⅖": 0.4,
+  "⅗": 0.6,
+  "⅘": 0.8,
+  "⅙": 1 / 6,
+  "⅚": 5 / 6,
+  "⅛": 0.125,
+  "⅜": 0.375,
+  "⅝": 0.625,
+  "⅞": 0.875,
+};
+const UNICODE_FRACTION_CHARS = Object.keys(UNICODE_FRACTIONS).join("");
 
 function PrintIcon({ className }: { className?: string }) {
   return (
@@ -35,21 +55,29 @@ type Props = {
 };
 
 export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
-  const [servings, setServings] = useState<number>(recipe.servings || 1);
-  const [baselineServings, setBaselineServings] = useState<number>(
-    recipe.servings || 1
+  // "servings" is MY serving size (defaults to 1) and drives the nutrition
+  // macros — those are about me and my day. Ingredients and the shopping list
+  // scale to feed everyone in `selectedPeople` (the recipe is about the family).
+  // Both initialize from the recipe's saved preferences when present.
+  const [servings, setServings] = useState<number>(
+    typeof recipe.defaultServingForMe === "number" && recipe.defaultServingForMe > 0
+      ? recipe.defaultServingForMe
+      : 1
   );
-  const [macros, setMacros] = useState<MacroLine | null | undefined>(
+  const [macros] = useState<MacroLine | null | undefined>(
     recipe.nutritionComputed || recipe.nutritionProvided
   );
   const [status, setStatus] = useState<string | null>(null);
   const [mealType, setMealType] = useState<string>(recipe.mealType || "");
   const [savingMealType, setSavingMealType] = useState(false);
-  const [selectedPeople, setSelectedPeople] = useState<Record<string, boolean>>({
-    Me: true,
-    Wife: false,
-    Elliot: false,
-    Noah: false,
+  const [selectedPeople, setSelectedPeople] = useState<Record<string, boolean>>(() => {
+    const saved: string[] | undefined = recipe.defaultEaters;
+    return Object.fromEntries(
+      FAMILY_MEMBERS.map((person) => [
+        person,
+        saved && saved.length ? saved.includes(person) : true,
+      ])
+    );
   });
   const [cookedEstimate, setCookedEstimate] = useState<{
     proteinCookedGrams: number;
@@ -131,23 +159,31 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
   const prevId = currentIdx > 0 ? flatOrder[currentIdx - 1] : null;
   const nextId = currentIdx >= 0 && currentIdx < flatOrder.length - 1 ? flatOrder[currentIdx + 1] : null;
 
-  const handleMealTypeSave = async () => {
+  const handleSaveSettings = async () => {
     setSavingMealType(true);
-    setStatus("Saving meal type…");
+    setStatus("Saving settings…");
+    const eaters = Object.entries(selectedPeople)
+      .filter(([, checked]) => checked)
+      .map(([person]) => person);
     try {
-      const res = await fetch(`/api/recipes/${recipe._id}/mealtype`, {
+      const res = await fetch(`/api/recipes/${recipe._id}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mealType: mealType || null }),
+        body: JSON.stringify({
+          mealType: mealType || null,
+          servingForMe: servings,
+          eaters,
+        }),
       });
       if (!res.ok) {
-        setStatus("Failed to save meal type");
+        setStatus("Failed to save settings");
       } else {
-        setStatus("Meal type saved");
+        setStatus("Settings saved");
+        router.refresh();
       }
     } catch (error) {
       console.error(error);
-      setStatus("Error saving meal type");
+      setStatus("Error saving settings");
     } finally {
       setSavingMealType(false);
     }
@@ -157,12 +193,22 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
     ...FAMILY_MULTIPLIERS,
   };
 
-  const totalFactor = Object.entries(selectedPeople).reduce((acc, [person, checked]) => {
-    if (!checked) return acc;
-    return acc + (extraMultipliers[person] ?? 0);
-  }, 0);
+  const selectedNames = Object.entries(selectedPeople)
+    .filter(([, checked]) => checked)
+    .map(([person]) => person);
 
-  const scaledServings = (recipe.servings || 1) * (totalFactor || 1);
+  // Sum of the selected eaters' multipliers (Me 1, Wife/Elliot 0.75, Noah 0.5).
+  const eaterFactor = selectedNames.reduce(
+    (acc, person) => acc + (extraMultipliers[person] ?? 0),
+    0
+  );
+
+  // Total servings to cook = my serving size x everyone eating.
+  const cookServings = (servings || 1) * (eaterFactor || 1);
+  // Factor applied to the recipe's written ingredient amounts.
+  const ingredientFactor = cookServings / (recipe.servings || 1);
+
+  const scaledServings = cookServings;
   const GRAMS_PER_OZ = 28.3495;
 
   const isMainProtein = (ing: any) => {
@@ -324,6 +370,110 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
     return val.toFixed(2);
   }
 
+  // Convert a leading quantity token (e.g. "1 ½", "½", "1 1/2", "2", "1.5")
+  // into a number. Returns null when the token isn't a recognizable amount.
+  function tokenToNumber(token: string): number | null {
+    const t = token.trim();
+    if (UNICODE_FRACTIONS[t] != null) return UNICODE_FRACTIONS[t];
+    let m = t.match(new RegExp(`^(\\d+)\\s*([${UNICODE_FRACTION_CHARS}])$`));
+    if (m) return parseInt(m[1], 10) + UNICODE_FRACTIONS[m[2]];
+    m = t.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+    if (m && Number(m[3])) return Number(m[1]) + Number(m[2]) / Number(m[3]);
+    m = t.match(/^(\d+)\/(\d+)$/);
+    if (m && Number(m[2])) return Number(m[1]) / Number(m[2]);
+    if (/^\d+(\.\d+)?$/.test(t)) return parseFloat(t);
+    return null;
+  }
+
+  // Find and parse a leading amount (incl. unicode fractions and ranges) from
+  // a raw ingredient string. Returns the value and where it ends in the string.
+  function parseLeadingAmount(
+    text: string
+  ): { value: number | { low: number; high: number }; end: number } | null {
+    const fr = UNICODE_FRACTION_CHARS;
+    const re = new RegExp(
+      `^\\s*(\\d+\\s*[-–]\\s*\\d+|\\d+\\s+\\d+\\/\\d+|\\d+\\s*[${fr}]|\\d+\\/\\d+|[${fr}]|\\d+(?:\\.\\d+)?)`
+    );
+    const m = text.match(re);
+    if (!m) return null;
+    const token = m[1];
+    const range = token.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (range) {
+      return {
+        value: { low: Number(range[1]), high: Number(range[2]) },
+        end: m[0].length,
+      };
+    }
+    const value = tokenToNumber(token);
+    if (value === null) return null;
+    return { value, end: m[0].length };
+  }
+
+  // Build the on-screen ingredient line with the scaled amount shown first.
+  // Prefers structured quantity fields, then scales a leading amount in the raw
+  // text, and finally falls back to the original text when nothing parses.
+  function scaleIngredientDisplay(
+    ing: any,
+    factor: number
+  ): { main: string; original: string | null } {
+    const showWas = Math.abs(factor - 1) > 0.001;
+    const fmtScaled = (q: number | { low: number; high: number }) =>
+      typeof q === "object"
+        ? `${formatQuantity(q.low * factor)}-${formatQuantity(q.high * factor)}`
+        : formatQuantity(q * factor);
+    const fmtPlain = (q: number | { low: number; high: number }) =>
+      typeof q === "object"
+        ? `${formatQuantity(q.low)}-${formatQuantity(q.high)}`
+        : formatQuantity(q);
+
+    const text: string = (ing.originalText || "").trim();
+    const strippedName = () => {
+      const lead = parseLeadingAmount(text);
+      return lead ? text.slice(lead.end).trim() : text;
+    };
+
+    // Food-scale first: when gram weights are known, scale and show grams as the
+    // primary unit (these recipes are measured on a scale, so cups are unreliable).
+    const grams =
+      typeof ing.grams === "number" && ing.grams > 0 ? ing.grams : null;
+    if (grams) {
+      const name = ing.nameNormalized?.trim() || strippedName();
+      return {
+        main: `${Math.round(grams * factor)} g${name ? ` ${name}` : ""}`,
+        original: showWas ? `${Math.round(grams)} g` : null,
+      };
+    }
+
+    // Structured volume/count quantity (treat 0 as "no amount").
+    const structuredRaw =
+      parseQuantity(ing.quantityText || ing.quantity || null) ??
+      (typeof ing.quantityNumber === "number" ? ing.quantityNumber : null);
+    const structured =
+      typeof structuredRaw === "number" && structuredRaw === 0
+        ? null
+        : structuredRaw;
+    if (structured !== null) {
+      const unit = ing.unit ? ` ${ing.unit}` : "";
+      const name = ing.nameNormalized?.trim() || strippedName();
+      return {
+        main: `${fmtScaled(structured)}${unit}${name ? ` ${name}` : ""}`,
+        original: showWas ? `${fmtPlain(structured)}${unit}` : null,
+      };
+    }
+
+    // Otherwise scale a leading amount inside the raw text.
+    const lead = parseLeadingAmount(text);
+    if (lead) {
+      const rest = text.slice(lead.end).trim();
+      return {
+        main: `${fmtScaled(lead.value)}${rest ? ` ${rest}` : ""}`,
+        original: showWas ? fmtPlain(lead.value) : null,
+      };
+    }
+
+    return { main: text, original: null };
+  }
+
   const heroScaled = scaleMacrosForServings(macros, servings);
   const heroChips = heroScaled
     ? [
@@ -386,7 +536,7 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
                   <p className="mb-3 text-xs font-semibold uppercase text-zinc-500">Settings</p>
                   <div className="space-y-3">
                     <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
-                      Servings
+                      My serving size
                       <input
                         type="number"
                         min={0.25}
@@ -396,40 +546,30 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
                         className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
                       />
                     </label>
+                    <p className="text-xs text-zinc-400">
+                      Macros are shown for your serving. Ingredients scale to everyone selected under &ldquo;Who&apos;s eating&rdquo;.
+                    </p>
                     <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
-                      Baseline (Me)
-                      <input
-                        type="number"
-                        min={0.25}
-                        step={0.25}
-                        value={baselineServings}
-                        onChange={(e) => setBaselineServings(Number(e.target.value))}
-                        className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
-                      />
-                    </label>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-2 text-sm text-zinc-700">
-                        Meal type
-                        <select
-                          value={mealType}
-                          onChange={(e) => setMealType(e.target.value)}
-                          className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
-                        >
-                          <option value="">Not set</option>
-                          <option value="breakfast">Breakfast</option>
-                          <option value="snack">Snack</option>
-                          <option value="lunch">Lunch</option>
-                          <option value="dinner">Dinner</option>
-                        </select>
-                      </label>
-                      <button
-                        onClick={handleMealTypeSave}
-                        disabled={savingMealType}
-                        className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                      Meal type
+                      <select
+                        value={mealType}
+                        onChange={(e) => setMealType(e.target.value)}
+                        className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
                       >
-                        {savingMealType ? "Saving…" : "Save"}
-                      </button>
-                    </div>
+                        <option value="">Not set</option>
+                        <option value="breakfast">Breakfast</option>
+                        <option value="snack">Snack</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="dinner">Dinner</option>
+                      </select>
+                    </label>
+                    <button
+                      onClick={handleSaveSettings}
+                      disabled={savingMealType}
+                      className="w-full rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      {savingMealType ? "Saving…" : "Save settings"}
+                    </button>
                     <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700">
                       <span>{imageUploading ? "Uploading…" : "Upload image"}</span>
                       <input
@@ -513,6 +653,8 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
         recipeId={recipe._id}
         mealPlans={mealPlans}
         defaultMealType={recipe.mealType}
+        defaultEaters={selectedNames}
+        defaultBaseline={servings}
         variant="button"
         className="!w-full !justify-center !rounded-full !border-brand-500 !bg-brand-500 !px-5 !py-3 !text-base !text-white shadow-md shadow-brand-500/30"
       />
@@ -563,36 +705,25 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
 
       {/* Ingredients */}
       <div className="rounded-card bg-white p-5 shadow-sm">
-        <h2 className="text-base font-bold text-zinc-900">Ingredients</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-bold text-zinc-900">Ingredients</h2>
+          <span className="text-xs text-zinc-400">
+            for {selectedNames.length ? selectedNames.join(", ") : "the family"} ·{" "}
+            {cookServings.toFixed(2)} servings
+          </span>
+        </div>
         <ul className="mt-3 space-y-2 text-sm text-zinc-700">
-          {recipe.ingredients?.map((ing: any, idx: number) => (
-            <li key={ing._key || idx} className="border-b border-zinc-50 pb-2 last:border-0 last:pb-0">
-              <span className="font-medium text-zinc-800">{ing.originalText}</span>
-              {ing.grams ? (
-                <span className="text-zinc-400">
-                  {" "}· {ing.grams} g → {(ing.grams * (totalFactor || 1)).toFixed(1)} g
-                </span>
-              ) : null}
-              {(ing.quantityNumber || ing.quantityText || ing.quantity) && (
-                <div className="text-xs text-brand-600">
-                  {(() => {
-                    const factor = totalFactor || 1;
-                    const qty =
-                      parseQuantity(ing.quantityText || ing.quantity || null) ??
-                      (typeof ing.quantityNumber === "number" ? ing.quantityNumber : null);
-                    if (qty === null) return null;
-                    if (typeof qty === "object" && "low" in qty && "high" in qty) {
-                      const scaledLow = qty.low * factor;
-                      const scaledHigh = qty.high * factor;
-                      return `Scaled: ${formatQuantity(scaledLow)}-${formatQuantity(scaledHigh)}${ing.unit ? ` ${ing.unit}` : ""}`;
-                    }
-                    const scaled = qty * factor;
-                    return `Scaled: ${formatQuantity(scaled)}${ing.unit ? ` ${ing.unit}` : ""}`;
-                  })()}
-                </div>
-              )}
-            </li>
-          ))}
+          {recipe.ingredients?.map((ing: any, idx: number) => {
+            const display = scaleIngredientDisplay(ing, ingredientFactor);
+            return (
+              <li key={ing._key || idx} className="border-b border-zinc-50 pb-2 last:border-0 last:pb-0">
+                <span className="font-medium text-zinc-800">{display.main}</span>
+                {display.original && (
+                  <span className="text-zinc-400"> · was {display.original}</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -611,9 +742,9 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
         </ol>
       </div>
 
-      {/* Nutrition */}
+      {/* Nutrition (per my serving) */}
       <NutritionCard macros={macros} servings={servings} />
-      <FamilyMacroTable macros={macros} baselineServings={baselineServings} />
+      <FamilyMacroTable macros={macros} baselineServings={servings} people={selectedNames} />
 
       {totalGrams > 0 && (
         <div className="rounded-card bg-white p-5 text-sm text-zinc-700 shadow-sm">
@@ -629,7 +760,7 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
               {Object.entries(selectedPeople)
                 .filter(([, checked]) => checked)
                 .map(([person]) => {
-                  const mult = extraMultipliers[person] ?? 1;
+                  const mult = (extraMultipliers[person] ?? 1) * (servings || 1);
                   const proteinG = cookedEstimate
                     ? perServingProteinCooked * mult
                     : perServingProteinGrams * mult;
@@ -670,8 +801,8 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
           </h1>
           <p className="text-sm text-black mb-2">
             Servings: {scaledServings.toFixed(1)} (base {recipe.servings ?? 1})
-            {totalFactor > 0 && totalFactor !== 1 && (
-              <> — scaled for {Object.entries(selectedPeople).filter(([, c]) => c).map(([p]) => p).join(", ")}</>
+            {selectedNames.length > 0 && (
+              <> — scaled for {selectedNames.join(", ")}</>
             )}
           </p>
           {coverUrl && (
@@ -684,28 +815,8 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
           <h2 className="text-sm font-bold text-black mt-3 mb-1">Ingredients (scaled)</h2>
           <ul className="list-disc pl-5 text-sm text-black space-y-0.5 mb-3">
             {recipe.ingredients?.map((ing: any, idx: number) => {
-              const factor = totalFactor || 1;
-              const qty =
-                parseQuantity(ing.quantityText || ing.quantity || null) ??
-                (typeof ing.quantityNumber === "number" ? ing.quantityNumber : null);
-              const name = ing.nameNormalized || ing.originalText?.replace(/^[\d\s\/\-\.]+\s*[\w]*\s*[-–—]?\s*/i, "")?.trim() || ing.originalText || "";
-              let line: string;
-              if (qty !== null && (ing.quantityText || ing.quantity || typeof ing.quantityNumber === "number")) {
-                if (typeof qty === "object" && "low" in qty && "high" in qty) {
-                  const low = formatQuantity(qty.low * factor);
-                  const high = formatQuantity(qty.high * factor);
-                  line = `${low}-${high}${ing.unit ? ` ${ing.unit}` : ""}${name ? ` ${name}` : ""}`;
-                } else {
-                  const scaled = formatQuantity(qty * factor);
-                  line = `${scaled}${ing.unit ? ` ${ing.unit}` : ""}${name ? ` ${name}` : ""}`;
-                }
-                if (ing.grams) {
-                  line += ` (${(ing.grams * factor).toFixed(0)} g)`;
-                }
-              } else {
-                line = ing.originalText || "";
-              }
-              return <li key={ing._key ?? idx}>{line}</li>;
+              const display = scaleIngredientDisplay(ing, ingredientFactor);
+              return <li key={ing._key ?? idx}>{display.main}</li>;
             })}
           </ul>
           <h2 className="text-sm font-bold text-black mt-3 mb-1">Instructions</h2>
@@ -721,7 +832,7 @@ export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
                 {Object.entries(selectedPeople)
                   .filter(([, checked]) => checked)
                   .map(([person]) => {
-                    const mult = extraMultipliers[person] ?? 1;
+                    const mult = (extraMultipliers[person] ?? 1) * (servings || 1);
                     const proteinG = cookedEstimate
                       ? perServingProteinCooked * mult
                       : perServingProteinGrams * mult;

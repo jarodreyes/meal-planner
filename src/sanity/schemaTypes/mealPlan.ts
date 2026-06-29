@@ -22,7 +22,14 @@ export const mealEntry = defineType({
       name: "baselineServingsForMe",
       type: "number",
       title: "Baseline Servings For Me",
-      description: "How many of my servings this meal uses",
+      description: "My serving size (defaults to 1). Each eater is scaled from this.",
+    }),
+    defineField({
+      name: "eaters",
+      type: "array",
+      title: "Who's Eating",
+      of: [{ type: "string" }],
+      description: "People eating this meal (Me, Wife, Elliot, Noah). Drives family scaling and shopping list.",
     }),
   ],
 });

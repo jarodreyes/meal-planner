@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import { FAMILY_MEMBERS } from "@/lib/nutrition";
 
 type Props = {
   planId: string;
@@ -12,8 +13,14 @@ export function AddMealForm({ planId, recipes }: Props) {
   const [mealType, setMealType] = useState("dinner");
   const [recipeId, setRecipeId] = useState(recipes?.[0]?._id || "");
   const [baseline, setBaseline] = useState(1);
+  const [eaters, setEaters] = useState<string[]>([...FAMILY_MEMBERS]);
   const [status, setStatus] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const toggleEater = (person: string) =>
+    setEaters((prev) =>
+      prev.includes(person) ? prev.filter((p) => p !== person) : [...prev, person]
+    );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -28,6 +35,7 @@ export function AddMealForm({ planId, recipes }: Props) {
           mealType,
           recipeId,
           baselineServingsForMe: baseline,
+          eaters,
         }),
       });
       const data = await res.json();
@@ -95,8 +103,28 @@ export function AddMealForm({ planId, recipes }: Props) {
             ))}
           </select>
         </label>
+        <div className="text-sm text-zinc-700">
+          Who&apos;s eating?
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {FAMILY_MEMBERS.map((person) => {
+              const active = eaters.includes(person);
+              return (
+                <button
+                  key={person}
+                  type="button"
+                  onClick={() => toggleEater(person)}
+                  className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+                    active ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-600"
+                  }`}
+                >
+                  {person}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <label className="text-sm text-zinc-700">
-          Baseline servings (Me)
+          My serving size
           <input
             type="number"
             step={0.25}

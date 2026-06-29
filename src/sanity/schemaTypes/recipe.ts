@@ -214,6 +214,19 @@ export const recipe = defineType({
       title: "Favorite",
       initialValue: false,
     }),
+    defineField({
+      name: "defaultServingForMe",
+      type: "number",
+      title: "My Serving Size",
+      description: "Saved serving size used for my macros on this recipe (defaults to 1).",
+    }),
+    defineField({
+      name: "defaultEaters",
+      type: "array",
+      title: "Default Who's Eating",
+      of: [{ type: "string" }],
+      description: "People who usually eat this recipe; drives ingredient scaling.",
+    }),
   ],
   preview: {
     select: {

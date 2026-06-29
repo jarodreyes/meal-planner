@@ -17,6 +17,19 @@ export const FAMILY_MULTIPLIERS: Record<string, number> = {
   Noah: 0.5,
 };
 
+/** Everyone, in display order. */
+export const FAMILY_MEMBERS = Object.keys(FAMILY_MULTIPLIERS);
+
+/**
+ * Sum the serving multipliers for the given people (defaults to everyone).
+ * This is the number of recipe "servings" needed to feed those eaters at a
+ * baseline of 1 serving for Me.
+ */
+export function sumFamilyMultipliers(people?: string[] | null): number {
+  const list = people && people.length ? people : FAMILY_MEMBERS;
+  return list.reduce((acc, person) => acc + (FAMILY_MULTIPLIERS[person] ?? 0), 0);
+}
+
 export function nutritionStubFromIngredients(
   ingredients: ParsedRecipe["ingredients"],
   servings: number

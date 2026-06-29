@@ -16,6 +16,7 @@ type Meal = {
   date: string;
   mealType: string;
   baselineServingsForMe: number;
+  eaters?: string[];
   recipe?: {
     _id: string;
     title: string;
@@ -59,9 +60,13 @@ export default async function MealPlanDetail({
 
   const shoppingList = buildShoppingList(meals);
 
+  // "My day" totals: only count meals I'm actually eating (Me selected, or no
+  // eaters recorded on older meals). Scaled to my serving size (Me multiplier = 1).
   const dailyTotals = meals.reduce<
     Record<string, { calories: number; protein: number; carbs: number; fat: number }>
   >((acc, meal) => {
+    const eating = !meal.eaters?.length || meal.eaters.includes("Me");
+    if (!eating) return acc;
     const macros = (meal.recipe?.nutritionComputed ||
       meal.recipe?.nutritionProvided) as MacroLine | undefined;
     const totals = totalsForMeal(macros, meal.baselineServingsForMe);
@@ -92,7 +97,9 @@ export default async function MealPlanDetail({
     };
     const key = meal.date || "unscheduled";
     acc[key] = acc[key] || {};
-    Object.entries(FAMILY_MULTIPLIERS).forEach(([person, multiplier]) => {
+    const eaters = meal.eaters?.length ? meal.eaters : Object.keys(FAMILY_MULTIPLIERS);
+    eaters.forEach((person) => {
+      const multiplier = FAMILY_MULTIPLIERS[person] ?? 0;
       const servings = meal.baselineServingsForMe * multiplier;
       const totals = {
         calories: perServing.calories * servings,
@@ -167,13 +174,20 @@ export default async function MealPlanDetail({
             <span className="text-fat">F {totals.fat.toFixed(0)}g</span>
           </div>
         )}
+        {meal.eaters?.length ? (
+          <p className="mt-1 text-[11px] text-zinc-400">Eating: {meal.eaters.join(", ")}</p>
+        ) : null}
         {macros && (
           <details className="mt-2">
             <summary className="cursor-pointer text-xs font-medium text-brand-600">
               Family breakdown
             </summary>
             <div className="mt-2">
-              <FamilyMacroTable macros={macros} baselineServings={meal.baselineServingsForMe} />
+              <FamilyMacroTable
+                macros={macros}
+                baselineServings={meal.baselineServingsForMe}
+                people={meal.eaters}
+              />
             </div>
           </details>
         )}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FAMILY_MEMBERS } from "@/lib/nutrition";
 
 type MealPlanOption = { _id: string; weekOf?: string };
 
@@ -10,6 +11,8 @@ type Props = {
   recipeId: string;
   mealPlans: MealPlanOption[];
   defaultMealType?: string | null;
+  defaultEaters?: string[];
+  defaultBaseline?: number;
   variant?: "icon" | "button";
   className?: string;
 };
@@ -44,6 +47,8 @@ export function AddToMealPlan({
   recipeId,
   mealPlans,
   defaultMealType,
+  defaultEaters,
+  defaultBaseline = 1,
   variant = "button",
   className = "",
 }: Props) {
@@ -53,11 +58,19 @@ export function AddToMealPlan({
   const [mealType, setMealType] = useState(
     defaultMealType && MEAL_TYPES.includes(defaultMealType) ? defaultMealType : "dinner"
   );
-  const [baseline, setBaseline] = useState(1);
+  const [baseline, setBaseline] = useState(defaultBaseline || 1);
+  const [eaters, setEaters] = useState<string[]>(
+    defaultEaters && defaultEaters.length ? defaultEaters : [...FAMILY_MEMBERS]
+  );
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  const toggleEater = (person: string) =>
+    setEaters((prev) =>
+      prev.includes(person) ? prev.filter((p) => p !== person) : [...prev, person]
+    );
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -88,6 +101,7 @@ export function AddToMealPlan({
           mealType,
           recipeId,
           baselineServingsForMe: baseline,
+          eaters,
         }),
       });
       const data = await res.json();
@@ -191,8 +205,28 @@ export function AddToMealPlan({
                   </select>
                 </label>
               </div>
+              <div className="text-sm text-zinc-700">
+                Who&apos;s eating?
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {FAMILY_MEMBERS.map((person) => {
+                    const active = eaters.includes(person);
+                    return (
+                      <button
+                        key={person}
+                        type="button"
+                        onClick={() => toggleEater(person)}
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                          active ? "bg-brand-500 text-white" : "bg-zinc-100 text-zinc-600"
+                        }`}
+                      >
+                        {person}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="block text-sm text-zinc-700">
-                Baseline servings (Me)
+                My serving size
                 <input
                   type="number"
                   min={0.25}

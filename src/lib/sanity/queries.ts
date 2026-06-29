@@ -28,6 +28,8 @@ export const recipeByIdQuery = `
   servings,
   mealType,
   favorited,
+  defaultServingForMe,
+  defaultEaters,
   images[] {
     _key,
     asset-> { _id, url }
@@ -59,6 +61,7 @@ export const mealPlanByIdQuery = `
     date,
     mealType,
     baselineServingsForMe,
+    eaters,
     recipe->{
       _id,
       title,

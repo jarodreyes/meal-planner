@@ -10,7 +10,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { date, mealType, recipeId, baselineServingsForMe } = body || {};
+    const { date, mealType, recipeId, baselineServingsForMe, eaters } = body || {};
 
     if (!date || !mealType || !recipeId || !baselineServingsForMe) {
       return NextResponse.json(
@@ -21,11 +21,16 @@ export async function PATCH(
       );
     }
 
+    const eatersList = Array.isArray(eaters)
+      ? eaters.filter((p): p is string => typeof p === "string")
+      : [];
+
     const entry = {
       _key: crypto.randomUUID(),
       date,
       mealType,
       baselineServingsForMe: Number(baselineServingsForMe),
+      eaters: eatersList,
       recipe: {
         _type: "reference",
         _ref: recipeId,
