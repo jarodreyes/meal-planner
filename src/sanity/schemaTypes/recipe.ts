@@ -108,12 +108,25 @@ export const recipe = defineType({
       name: "sourceType",
       type: "string",
       title: "Source Type",
-      options: { list: ["pdf", "paste"] },
+      options: { list: ["pdf", "paste", "url"] },
     }),
     defineField({
       name: "sourceName",
       type: "string",
       title: "Source Name",
+    }),
+    defineField({
+      name: "sourceUrl",
+      type: "url",
+      title: "Source URL",
+      description: "Canonical URL used for URL imports",
+    }),
+    defineField({
+      name: "sourceKey",
+      type: "string",
+      title: "Source Key",
+      description: "Stable key used to prevent duplicate imports",
+      readOnly: true,
     }),
     defineField({
       name: "sourceText",
@@ -194,6 +207,12 @@ export const recipe = defineType({
       name: "confidence",
       type: "number",
       title: "Import Confidence",
+    }),
+    defineField({
+      name: "favorited",
+      type: "boolean",
+      title: "Favorite",
+      initialValue: false,
     }),
   ],
   preview: {

@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { readClient } from "@/lib/sanity/client";
-import { recipeByIdQuery, recipesNavQuery } from "@/lib/sanity/queries";
+import {
+  mealPlansQuery,
+  recipeByIdQuery,
+  recipesNavQuery,
+} from "@/lib/sanity/queries";
 import { RecipeDetailClient } from "./RecipeDetailClient";
 
 export default async function RecipeDetailPage({
@@ -13,14 +17,17 @@ export default async function RecipeDetailPage({
     return notFound();
   }
 
-  const [recipe, nav] = await Promise.all([
+  const [recipe, nav, mealPlans] = await Promise.all([
     readClient.fetch(recipeByIdQuery, { id }),
     readClient.fetch(recipesNavQuery),
+    readClient.fetch(mealPlansQuery),
   ]);
 
   if (!recipe) {
     return notFound();
   }
 
-  return <RecipeDetailClient recipe={recipe} nav={nav || []} />;
+  return (
+    <RecipeDetailClient recipe={recipe} nav={nav || []} mealPlans={mealPlans || []} />
+  );
 }

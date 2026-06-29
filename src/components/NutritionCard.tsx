@@ -1,4 +1,6 @@
 import { MacroLine, scaleMacrosForServings } from "@/lib/nutrition";
+import { MacroRing } from "./MacroRing";
+import { MacroBars } from "./MacroBars";
 
 type Props = {
   macros: MacroLine | null | undefined;
@@ -7,7 +9,11 @@ type Props = {
 
 export function NutritionCard({ macros, servings }: Props) {
   if (!macros) {
-    return <p className="text-sm text-zinc-600">No nutrition data yet.</p>;
+    return (
+      <div className="rounded-card bg-white p-5 text-sm text-zinc-500 shadow-sm">
+        No nutrition data yet.
+      </div>
+    );
   }
 
   const scaled = scaleMacrosForServings(macros, servings);
@@ -15,40 +21,28 @@ export function NutritionCard({ macros, servings }: Props) {
 
   const { perServing, total } = scaled;
 
-  const rows = [
-    { label: "Calories", per: perServing.calories, total: total.calories, suffix: "" },
-    { label: "Protein", per: perServing.protein_g, total: total.protein_g, suffix: "g" },
-    { label: "Carbs", per: perServing.carbs_g, total: total.carbs_g, suffix: "g" },
-    { label: "Fat", per: perServing.fat_g, total: total.fat_g, suffix: "g" },
-  ];
-
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-      <div className="bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-700">
-        Nutrition (basis: {macros.servingsBasis} servings)
+    <div className="rounded-card bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-zinc-800">Nutrition</h3>
+        <span className="text-xs text-zinc-400">{servings} servings</span>
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-600">
-          <tr>
-            <th className="px-4 py-2">Macro</th>
-            <th className="px-4 py-2">Per serving</th>
-            <th className="px-4 py-2">Total ({servings} servings)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.label} className="border-t border-zinc-200">
-              <td className="px-4 py-2 font-medium text-zinc-800">{row.label}</td>
-              <td className="px-4 py-2 text-zinc-700">
-                {row.per.toFixed(1)} {row.suffix}
-              </td>
-              <td className="px-4 py-2 text-zinc-700">
-                {row.total.toFixed(1)} {row.suffix}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      <div className="mt-3 flex items-center gap-5">
+        <MacroRing calories={total.calories} size={120} />
+        <div className="flex-1 space-y-3">
+          <MacroBars
+            protein={total.protein_g}
+            carbs={total.carbs_g}
+            fat={total.fat_g}
+          />
+        </div>
+      </div>
+
+      <p className="mt-4 text-xs text-zinc-500">
+        Per serving: {perServing.calories.toFixed(0)} cal · {perServing.protein_g.toFixed(0)}g protein ·{" "}
+        {perServing.carbs_g.toFixed(0)}g carbs · {perServing.fat_g.toFixed(0)}g fat
+      </p>
     </div>
   );
 }

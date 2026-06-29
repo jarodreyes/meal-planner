@@ -1,124 +1,117 @@
 import Link from "next/link";
 import { readClient } from "@/lib/sanity/client";
-import { recipesListQuery } from "@/lib/sanity/queries";
+import { mealPlansQuery, recipesListQuery } from "@/lib/sanity/queries";
 import { RecipeSearch } from "@/app/components/RecipeSearch";
+import { RecipeCard } from "@/app/components/RecipeCard";
+import { MEAL_TYPES } from "@/lib/mealTypes";
+
+type RecipeListItem = {
+  _id: string;
+  title: string;
+  favorited?: boolean;
+  importStatus?: string;
+  nutritionStatus?: string;
+  mealType?: string | null;
+  tags?: string[];
+  coverImage?: string | null;
+};
 
 type Props = {
-  searchParams: { importStatus?: string; tag?: string; mealType?: string };
+  searchParams: Promise<{
+    importStatus?: string;
+    tag?: string;
+    mealType?: string;
+    favorited?: string;
+  }>;
 };
+
+function chipHref(params: Record<string, string | undefined>) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v) sp.set(k, v);
+  });
+  const q = sp.toString();
+  return q ? `/recipes?${q}` : "/recipes";
+}
 
 export default async function RecipesPage({ searchParams }: Props) {
   const params = await searchParams;
   const importStatus = params.importStatus || undefined;
   const tag = params.tag || undefined;
   const mealType = params.mealType || undefined;
+  const favorited = params.favorited === "true" ? true : undefined;
 
-  const recipes =
-    (await readClient.fetch(recipesListQuery, {
-      importStatus: importStatus ?? null,
-      tag: tag ?? null,
-      mealType: mealType ?? null,
-    })) || [];
+  const queryParams = {
+    importStatus: importStatus ?? null,
+    tagFilter: tag ?? null,
+    mealType: mealType ?? null,
+    favorited: favorited ?? null,
+  };
+  const [recipes, mealPlans] = await Promise.all([
+    readClient.fetch(recipesListQuery, queryParams),
+    readClient.fetch(mealPlansQuery),
+  ]);
+  const recipeList: RecipeListItem[] = recipes || [];
+  const planOptions = mealPlans || [];
+
+  const chipBase =
+    "shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition";
+  const chipActive = "bg-brand-500 text-white shadow-sm";
+  const chipIdle = "bg-white text-zinc-600 ring-1 ring-zinc-100";
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-zinc-500">Recipes</p>
-          <h1 className="text-2xl font-semibold text-zinc-900">All recipes</h1>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <p className="text-sm font-medium text-brand-500">Recipes</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          All recipes
+        </h1>
+      </div>
+
+      <RecipeSearch />
+
+      <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
         <Link
-          href="/import"
-          className="rounded bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+          href="/recipes"
+          className={`${chipBase} ${!mealType && !favorited ? chipActive : chipIdle}`}
         >
-          Import recipes
+          All
+        </Link>
+        {MEAL_TYPES.map((mt) => (
+          <Link
+            key={mt}
+            href={chipHref({ mealType: mealType === mt ? undefined : mt, favorited: favorited ? "true" : undefined })}
+            className={`${chipBase} capitalize ${mealType === mt ? chipActive : chipIdle}`}
+          >
+            {mt}
+          </Link>
+        ))}
+        <Link
+          href={chipHref({ mealType, favorited: favorited ? undefined : "true" })}
+          className={`${chipBase} ${favorited ? chipActive : chipIdle}`}
+        >
+          ♥ Favorites
         </Link>
       </div>
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <p className="text-sm font-medium text-zinc-700 mb-2">Search recipes</p>
-        <RecipeSearch />
-      </section>
-
-      <form className="flex flex-wrap gap-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <label className="flex items-center gap-2 text-sm text-zinc-700">
-          Meal type
-          <select
-            name="mealType"
-            defaultValue={mealType ?? ""}
-            className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          >
-            <option value="">Any</option>
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="snack">Snack</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-zinc-700">
-          Import status
-          <select
-            name="importStatus"
-            defaultValue={importStatus ?? ""}
-            className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          >
-            <option value="">Any</option>
-            <option value="done">Done</option>
-            <option value="needs_review">Needs review</option>
-            <option value="failed">Failed</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-sm text-zinc-700">
-          Tag
-          <input
-            name="tag"
-            defaultValue={tag ?? ""}
-            placeholder="e.g. dinner"
-            className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          />
-        </label>
-        <button
-          type="submit"
-          className="rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-        >
-          Filter
-        </button>
-      </form>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {recipes.map((recipe: any) => (
-          <Link
-            key={recipe._id}
-            href={`/recipes/${recipe._id}`}
-            className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm hover:border-zinc-300"
-          >
-            <p className="text-sm font-semibold text-zinc-800">{recipe.title}</p>
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
-              Import: {recipe.importStatus || "n/a"} | Nutrition:{" "}
-              {recipe.nutritionStatus || "pending"}
-            </p>
-            {recipe.mealType && (
-              <p className="text-xs text-zinc-600">Meal type: {recipe.mealType}</p>
-            )}
-            {recipe.tags?.length ? (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {recipe.tags.map((tag: string) => (
-                  <span
-                    key={tag}
-                    className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </Link>
+      <div className="grid grid-cols-2 gap-3">
+        {recipeList.map((recipe) => (
+          <RecipeCard key={recipe._id} recipe={recipe} mealPlans={planOptions} />
         ))}
       </div>
-      {!recipes.length && (
-        <p className="text-sm text-zinc-600">
-          No recipes yet. Import one to get started.
-        </p>
+
+      {!recipeList.length && (
+        <div className="rounded-card bg-white p-8 text-center shadow-sm">
+          <p className="text-sm text-zinc-600">
+            No recipes here yet. Import one to get started.
+          </p>
+          <Link
+            href="/import"
+            className="mt-3 inline-block rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white"
+          >
+            Import a recipe
+          </Link>
+        </div>
       )}
     </div>
   );

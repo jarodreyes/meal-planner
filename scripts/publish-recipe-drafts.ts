@@ -63,7 +63,13 @@ async function main() {
     );
     if (!draft) continue;
     const { _id: _draftId, _rev, ...rest } = draft;
-    await client.createOrReplace({ ...rest, _id: publishedId });
+    // The draft document includes _type ("recipe"), but `rest` is typed loosely as
+    // Record<string, unknown>; cast to the shape createOrReplace expects.
+    const doc = { ...rest, _id: publishedId } as {
+      _id: string;
+      _type: string;
+    } & Record<string, unknown>;
+    await client.createOrReplace(doc);
     published++;
     console.log(`Published ${publishedId}`);
   }

@@ -16,4 +16,10 @@ module.exports = {
     projectId,
     dataset,
   },
+  // Hosted Studio URL: https://<studioHost>.sanity.studio
+  // Must be globally unique across sanity.studio; change and redeploy to rename.
+  studioHost: "macromeals-jarod",
+  deployment: {
+    appId: "vkqhik3fu4abkfgjuzsun27z",
+  },
 };

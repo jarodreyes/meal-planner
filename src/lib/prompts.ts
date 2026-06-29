@@ -18,7 +18,7 @@ JSON shape:
     {
       "title": string,
       "mealType": "breakfast" | "lunch" | "dinner" | "snack",
-      "sourceType": "pdf" | "paste",
+      "sourceType": "pdf" | "paste" | "url",
       "sourceName": string | null,
       "sourceText": string,
       "servings": number | null,

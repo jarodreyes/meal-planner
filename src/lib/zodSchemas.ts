@@ -23,9 +23,11 @@ export const ingredientLineSchema = z.object({
 
 export const recipeSchema = z.object({
   title: z.string().optional().nullable().default("Untitled recipe"),
-  sourceType: z.enum(["pdf", "paste"]),
+  sourceType: z.enum(["pdf", "paste", "url"]),
   /** Model often returns null when unknown; prompt allows null */
   sourceName: z.string().nullable().optional(),
+  sourceUrl: z.string().url().nullable().optional(),
+  sourceKey: z.string().nullable().optional(),
   sourceText: z.string(),
   servings: z.number().positive().nullish().default(1),
   mealType: z.enum(["breakfast", "lunch", "dinner", "snack"]).nullable().optional(),
@@ -43,6 +45,7 @@ export const recipeSchema = z.object({
     .enum(["pending", "provided", "computed", "failed", "needs_review"])
     .optional(),
   confidence: z.number().min(0).max(1).optional(),
+  favorited: z.boolean().optional(),
 });
 
 export const parsedRecipesSchema = z.object({

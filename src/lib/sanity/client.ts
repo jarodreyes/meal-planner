@@ -14,7 +14,12 @@ export const readClient = createClient({
   projectId,
   dataset,
   apiVersion,
-  useCdn: true,
+  // useCdn:false so reads are always fresh. This app is write-then-read heavy
+  // (create a meal plan and immediately view it, add a meal and reload, import
+  // a recipe and open it, toggle a favorite and refresh). The CDN can serve
+  // stale results for a few seconds after a write, which makes those changes
+  // look like they didn't save. Fresh reads avoid that entirely.
+  useCdn: false,
   perspective: "published",
 });
 

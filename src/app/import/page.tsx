@@ -1,5 +1,6 @@
 'use client';
 
+import Link from "next/link";
 import { useState } from "react";
 
 const MEAL_TYPES = [
@@ -10,8 +11,9 @@ const MEAL_TYPES = [
 ] as const;
 
 export default function ImportPage() {
-  const [sourceType, setSourceType] = useState<"pdf" | "paste">("pdf");
+  const [sourceType, setSourceType] = useState<"pdf" | "paste" | "url">("pdf");
   const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [mealTypes, setMealTypes] = useState<Set<string>>(
     () => new Set(MEAL_TYPES.map((m) => m.value))
@@ -38,7 +40,7 @@ export default function ImportPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setProgress("extract");
-    setStatus("Uploading and extracting PDF/text…");
+    setStatus("Preparing import…");
     setDoneCount(0);
     setFileCount(0);
     setResults([]);
@@ -48,11 +50,17 @@ export default function ImportPage() {
     mealTypes.forEach((m) => formData.append("mealTypes", m));
     if (sourceType === "paste") {
       formData.set("text", text);
+    } else if (sourceType === "url") {
+      formData.set("url", url);
     }
 
     try {
       setProgress("openai");
-      setStatus("Parsing recipes with OpenAI…");
+      setStatus(
+        sourceType === "url"
+          ? "Fetching recipe URL and importing…"
+          : "Parsing recipes with OpenAI…"
+      );
       const res = await fetch("/api/import", {
         method: "POST",
         body: formData,
@@ -83,18 +91,18 @@ export default function ImportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm font-medium text-zinc-500">Import</p>
-        <h1 className="text-2xl font-semibold text-zinc-900">
-          Import recipes from PDF or text
+        <p className="text-sm font-medium text-brand-500">Import</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+          Import a recipe
         </h1>
         <p className="text-sm text-zinc-600">
-          Raw text is stored in Sanity. Parsing uses OpenAI with Zod validation; failures are flagged.
+          Import from PDF, pasted text, or a recipe URL. URL import uses structured data when available, then falls back to OpenAI.
         </p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
+        className="space-y-4 rounded-card bg-white p-5 shadow-sm"
       >
         <div className="flex gap-3">
           <label className="flex items-center gap-2 text-sm text-zinc-700">
@@ -116,6 +124,16 @@ export default function ImportPage() {
               onChange={() => setSourceType("paste")}
             />
             Paste text
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-700">
+            <input
+              type="radio"
+              name="sourceType"
+              value="url"
+              checked={sourceType === "url"}
+              onChange={() => setSourceType("url")}
+            />
+            Recipe URL
           </label>
         </div>
 
@@ -165,6 +183,21 @@ export default function ImportPage() {
               <span>Select PDF(s)</span>
             </label>
           </div>
+        ) : sourceType === "url" ? (
+          <label className="block text-sm text-zinc-700">
+            Recipe URL
+            <input
+              name="url"
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+              placeholder="https://cooking.nytimes.com/recipes/..."
+            />
+            <span className="mt-1 block text-xs text-zinc-500">
+              Works best on pages that expose schema.org Recipe data, including many NYT Cooking pages.
+            </span>
+          </label>
         ) : (
           <label className="block text-sm text-zinc-700">
             Paste recipe text
@@ -182,7 +215,7 @@ export default function ImportPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+          className="w-full rounded-full bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-500/30 disabled:opacity-50"
         >
           {isSubmitting ? "Importing…" : "Import"}
         </button>
@@ -223,7 +256,7 @@ export default function ImportPage() {
       </form>
 
       {results.length > 0 && (
-        <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="space-y-2 rounded-card bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold text-zinc-800">Results</p>
           <ul className="space-y-2 text-sm text-zinc-700">
             {results.map((r, idx) => (
@@ -240,13 +273,35 @@ export default function ImportPage() {
                     </span>
                   ) : (
                     <>
-                      <span className="font-semibold">{r.title}</span>
+                      {r.recipeUrl ? (
+                        <Link
+                          href={r.recipeUrl}
+                          className="font-semibold text-zinc-900 underline-offset-2 hover:underline"
+                        >
+                          {r.title}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold">{r.title}</span>
+                      )}
                       <span className="text-xs uppercase text-zinc-500">
                         {r.mealType || "no meal type"}
                       </span>
                       <span className="text-xs text-zinc-600">
                         Import {r.importStatus} • Nutrition {r.nutritionStatus}
                       </span>
+                      {r.duplicate && (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                          Existing recipe
+                        </span>
+                      )}
+                      {r.recipeUrl && (
+                        <Link
+                          href={r.recipeUrl}
+                          className="rounded border border-zinc-300 px-2 py-0.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
+                        >
+                          View recipe
+                        </Link>
+                      )}
                     </>
                   )}
                 </div>

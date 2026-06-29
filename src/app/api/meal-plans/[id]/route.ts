@@ -5,9 +5,10 @@ export const runtime = "nodejs";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await req.json();
     const { date, mealType, recipeId, baselineServingsForMe } = body || {};
 
@@ -32,7 +33,7 @@ export async function PATCH(
     };
 
     await writeClient
-      .patch(params.id)
+      .patch(id)
       .setIfMissing({ meals: [] })
       .append("meals", [entry])
       .commit();
@@ -42,6 +43,41 @@ export async function PATCH(
     console.error("Add meal error", error);
     return NextResponse.json(
       { error: "Failed to update meal plan", details: `${error}` },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json({ error: "meal plan id is required" }, { status: 400 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const body = await req.json().catch(() => ({}));
+    const mealKey = searchParams.get("mealKey") || body?.mealKey;
+
+    if (mealKey) {
+      // Remove a single meal entry from the plan by its array key.
+      await writeClient
+        .patch(id)
+        .unset([`meals[_key=="${mealKey}"]`])
+        .commit();
+      return NextResponse.json({ ok: true, removed: mealKey });
+    }
+
+    // No mealKey: delete the entire meal plan.
+    await writeClient.delete(id);
+    return NextResponse.json({ ok: true, deleted: id });
+  } catch (error) {
+    console.error("Delete meal plan error", error);
+    return NextResponse.json(
+      { error: "Failed to delete", details: `${error}` },
       { status: 500 }
     );
   }

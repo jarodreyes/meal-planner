@@ -99,7 +99,7 @@ function splitSegmentBySize(
 
 export async function parseRecipesFromText(params: {
   text: string;
-  sourceType: "pdf" | "paste";
+  sourceType: "pdf" | "paste" | "url";
   sourceName?: string | null;
   images?: string[] | null;
 }) {
@@ -170,18 +170,22 @@ export async function parseRecipesFromText(params: {
     allRecipes = await parseOneChunk(cleanText);
   }
 
-  return allRecipes.map((recipe) => ({
-    ...recipe,
-    title: recipe.title || "Untitled recipe",
-    sourceType,
-    sourceName: sourceName ?? null,
-    sourceText: cleanText,
-    images: recipe.images ?? images ?? [],
-    importStatus:
-      recipe.importStatus ??
-      (recipe.confidence && recipe.confidence < 0.7 ? "needs_review" : "done"),
-    nutritionStatus: recipe.nutritionProvided ? "provided" : "pending",
-  }));
+  return allRecipes.map((recipe) => {
+    const confidence =
+      typeof recipe.confidence === "number" ? recipe.confidence : undefined;
+    return {
+      ...recipe,
+      title: recipe.title || "Untitled recipe",
+      sourceType,
+      sourceName: sourceName ?? null,
+      sourceText: cleanText,
+      images: recipe.images ?? images ?? [],
+      importStatus:
+        recipe.importStatus ??
+        (confidence != null && confidence < 0.7 ? "needs_review" : "done"),
+      nutritionStatus: recipe.nutritionProvided ? "provided" : "pending",
+    };
+  });
 }
 
 /**
@@ -223,12 +227,33 @@ export async function enrichImportedRecipe(recipe: {
     });
 
     const raw = completion.choices[0].message?.content || "{}";
-    const parsed = recipeEnrichmentResponseSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) {
-      console.error("enrichImportedRecipe: invalid JSON", parsed.error.flatten());
+    let obj: unknown;
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      console.error("enrichImportedRecipe: JSON parse failed");
       return {};
     }
-    return parsed.data;
+
+    const parsed = recipeEnrichmentResponseSchema.safeParse(obj);
+    if (parsed.success) return parsed.data;
+
+    // Model sometimes returns an invalid mealType string; don't discard nutrition for that.
+    if (obj && typeof obj === "object") {
+      const { mealType: _mealType, ...rest } = obj as Record<string, unknown>;
+      const validMeals = new Set(["breakfast", "lunch", "dinner", "snack"]);
+      const sanitized = {
+        ...rest,
+        ...(typeof _mealType === "string" && validMeals.has(_mealType)
+          ? { mealType: _mealType }
+          : {}),
+      };
+      const retry = recipeEnrichmentResponseSchema.safeParse(sanitized);
+      if (retry.success) return retry.data;
+    }
+
+    console.error("enrichImportedRecipe: invalid JSON", parsed.error.flatten());
+    return {};
   } catch (e) {
     console.error("enrichImportedRecipe failed", e);
     return {};

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AppShell } from "./components/AppShell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,40 +23,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const navItems = [
-    { href: "/recipes", label: "Recipes" },
-    { href: "/import", label: "Import" },
-    { href: "/review", label: "Review" },
-    { href: "/meal-plans", label: "Meal Plans" },
-    { href: "/studio", label: "Studio" },
-  ];
-
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-50 text-zinc-900`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-app text-zinc-900`}
       >
-        <div className="min-h-screen">
-          <header className="border-b bg-white">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-              <Link href="/" className="text-lg font-semibold">
-                MacroMeals
-              </Link>
-              <nav className="flex items-center gap-4 text-sm font-medium">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="rounded px-2 py-1 text-zinc-700 hover:bg-zinc-100"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          </header>
-          <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

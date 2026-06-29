@@ -5,42 +5,62 @@ type Props = {
   baselineServings: number;
 };
 
+const AVATAR_COLORS: Record<string, string> = {
+  Me: "bg-brand-500",
+  Wife: "bg-protein",
+  Elliot: "bg-carbs",
+  Noah: "bg-fat",
+};
+
 export function FamilyMacroTable({ macros, baselineServings }: Props) {
   if (!macros) {
-    return <p className="text-sm text-zinc-600">No nutrition data yet.</p>;
+    return (
+      <div className="rounded-card bg-white p-5 text-sm text-zinc-500 shadow-sm">
+        No nutrition data yet.
+      </div>
+    );
   }
 
   const rows = computeFamilyServingTable(macros, baselineServings);
 
   return (
-    <div className="mt-3 overflow-hidden rounded-lg border border-zinc-200 bg-white">
-      <div className="bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-700">
-        Family servings (baseline for Me: {baselineServings})
+    <div className="rounded-card bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-zinc-800">Who&apos;s eating</h3>
+        <span className="text-xs text-zinc-400">baseline {baselineServings}x</span>
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-100 text-left text-xs uppercase tracking-wide text-zinc-600">
-          <tr>
-            <th className="px-4 py-2">Person</th>
-            <th className="px-4 py-2">Servings</th>
-            <th className="px-4 py-2">Calories</th>
-            <th className="px-4 py-2">Protein</th>
-            <th className="px-4 py-2">Carbs</th>
-            <th className="px-4 py-2">Fat</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.person} className="border-t border-zinc-200">
-              <td className="px-4 py-2 font-medium text-zinc-800">{row.person}</td>
-              <td className="px-4 py-2 text-zinc-700">{row.servings.toFixed(2)}</td>
-              <td className="px-4 py-2 text-zinc-700">{row.calories.toFixed(0)}</td>
-              <td className="px-4 py-2 text-zinc-700">{row.protein.toFixed(1)} g</td>
-              <td className="px-4 py-2 text-zinc-700">{row.carbs.toFixed(1)} g</td>
-              <td className="px-4 py-2 text-zinc-700">{row.fat.toFixed(1)} g</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      <ul className="mt-3 space-y-2">
+        {rows.map((row) => (
+          <li
+            key={row.person}
+            className="flex items-center gap-3 rounded-2xl bg-zinc-50 px-3 py-2"
+          >
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                AVATAR_COLORS[row.person] ?? "bg-zinc-400"
+              }`}
+            >
+              {row.person.charAt(0)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm font-semibold text-zinc-800">{row.person}</p>
+                <p className="text-sm font-bold text-zinc-900">
+                  {row.calories.toFixed(0)}
+                  <span className="ml-0.5 text-xs font-normal text-zinc-400">cal</span>
+                </p>
+              </div>
+              <div className="mt-0.5 flex gap-3 text-xs text-zinc-500">
+                <span>{row.servings.toFixed(2)} serv</span>
+                <span className="text-protein">P {row.protein.toFixed(0)}g</span>
+                <span className="text-carbs">C {row.carbs.toFixed(0)}g</span>
+                <span className="text-fat">F {row.fat.toFixed(0)}g</span>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

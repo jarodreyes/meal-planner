@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FamilyMacroTable } from "@/components/FamilyMacroTable";
 import { NutritionCard } from "@/components/NutritionCard";
-import { MacroLine, FAMILY_MULTIPLIERS } from "@/lib/nutrition";
+import { MacroLine, FAMILY_MULTIPLIERS, scaleMacrosForServings } from "@/lib/nutrition";
+import { FavoriteButton } from "@/app/components/FavoriteButton";
+import { AddToMealPlan } from "@/app/components/AddToMealPlan";
+import { gradientForMealType } from "@/lib/mealTypes";
 
 function PrintIcon({ className }: { className?: string }) {
   return (
@@ -27,9 +31,10 @@ function SettingsIcon({ className }: { className?: string }) {
 type Props = {
   recipe: any;
   nav: { _id: string; title: string; mealType?: string | null }[];
+  mealPlans?: { _id: string; weekOf?: string }[];
 };
 
-export function RecipeDetailClient({ recipe, nav }: Props) {
+export function RecipeDetailClient({ recipe, nav, mealPlans = [] }: Props) {
   const [servings, setServings] = useState<number>(recipe.servings || 1);
   const [baselineServings, setBaselineServings] = useState<number>(
     recipe.servings || 1
@@ -121,16 +126,6 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
     window.print();
   };
 
-  const groupedNav = nav.reduce<Record<string, { _id: string; title: string }[]>>(
-    (acc, r) => {
-      const key = r.mealType || "unspecified";
-      if (!acc[key]) acc[key] = [];
-      acc[key].push({ _id: r._id, title: r.title });
-      return acc;
-    },
-    {}
-  );
-
   const flatOrder = nav.map((r) => r._id);
   const currentIdx = flatOrder.indexOf(recipe._id);
   const prevId = currentIdx > 0 ? flatOrder[currentIdx - 1] : null;
@@ -186,7 +181,15 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
   const { totalProteinGrams, totalOtherGrams, proteinLabels, otherLabels } = (
     recipe.ingredients || []
   ).reduce(
-    (acc, ing: any) => {
+    (
+      acc: {
+        totalProteinGrams: number;
+        totalOtherGrams: number;
+        proteinLabels: string[];
+        otherLabels: string[];
+      },
+      ing: any
+    ) => {
       const g = ing.grams || 0;
       const label = ing.nameNormalized || ing.originalText || "";
       if (isMainProtein(ing)) {
@@ -321,311 +324,338 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
     return val.toFixed(2);
   }
 
+  const heroScaled = scaleMacrosForServings(macros, servings);
+  const heroChips = heroScaled
+    ? [
+        { label: "Cal", value: Math.round(heroScaled.total.calories).toString(), color: "text-brand-600" },
+        { label: "Protein", value: `${Math.round(heroScaled.total.protein_g)}g`, color: "text-protein" },
+        { label: "Carbs", value: `${Math.round(heroScaled.total.carbs_g)}g`, color: "text-carbs" },
+        { label: "Fat", value: `${Math.round(heroScaled.total.fat_g)}g`, color: "text-fat" },
+      ]
+    : [];
+
+  const validImages = (recipeImages ?? []).filter((img) => img?.asset?.url);
+  const coverUrl = validImages[0]?.asset?.url;
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-        <aside className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase text-zinc-600">Recipes</p>
-          <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
-            {Object.entries(groupedNav).map(([group, items]) => (
-              <div key={group} className="space-y-1">
-                <p className="text-xs font-semibold text-zinc-700">
-                  {group === "unspecified" ? "Unspecified" : group}
-                </p>
-                <div className="space-y-1">
-                  {items.map((item) => (
-                    <a
-                      key={item._id}
-                      href={`/recipes/${item._id}`}
-                      className={`block rounded px-2 py-1 text-sm ${
-                        item._id === recipe._id
-                          ? "bg-zinc-900 text-white"
-                          : "hover:bg-zinc-100 text-zinc-800"
-                      }`}
-                    >
-                      {item.title}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <a
-              href={prevId ? `/recipes/${prevId}` : "#"}
-              className={`flex-1 rounded border px-2 py-1 text-center text-sm ${
-                prevId ? "hover:bg-zinc-50 text-zinc-800" : "pointer-events-none text-zinc-400"
-              }`}
-            >
-              Prev
-            </a>
-            <a
-              href={nextId ? `/recipes/${nextId}` : "#"}
-              className={`flex-1 rounded border px-2 py-1 text-center text-sm ${
-                nextId ? "hover:bg-zinc-50 text-zinc-800" : "pointer-events-none text-zinc-400"
-              }`}
-            >
-              Next
-            </a>
-          </div>
-        </aside>
+    <div className="space-y-5">
+      {/* Hero */}
+      <div className="relative -mx-5 -mt-4 overflow-hidden">
+        <div
+          className="aspect-square w-full bg-cover bg-center"
+          style={
+            coverUrl
+              ? { backgroundImage: `url(${coverUrl})` }
+              : { backgroundImage: gradientForMealType(mealType) }
+          }
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/25" />
 
-        <div className="space-y-6">
-          {/* Hero: full-width image with title, meal type, and print/settings overlaid */}
-          <div className="relative -mx-4 mt-0 overflow-hidden rounded-none sm:mx-0 sm:rounded-lg">
-            <div
-              className="aspect-[16/10] w-full bg-zinc-200 bg-cover bg-center"
-              style={
-                recipeImages.length > 0 && recipeImages[0]?.asset?.url
-                  ? { backgroundImage: `url(${recipeImages[0].asset.url})` }
-                  : undefined
-              }
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="rounded-full bg-white/90 p-2 text-zinc-800 shadow hover:bg-white"
-                  title="Print"
-                >
-                  <PrintIcon className="h-5 w-5" />
-                </button>
-                <div className="relative" ref={settingsRef}>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen((o) => !o)}
-                    className="rounded-full bg-white/90 p-2 text-zinc-800 shadow hover:bg-white"
-                    title="Recipe settings"
-                  >
-                    <SettingsIcon className="h-5 w-5" />
-                  </button>
-                  {settingsOpen && (
-                    <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-lg border border-zinc-200 bg-white p-4 shadow-lg">
-                      <p className="mb-3 text-xs font-semibold uppercase text-zinc-500">Settings for this recipe</p>
-                      <div className="space-y-3">
-                        <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
-                          Servings
-                          <input
-                            type="number"
-                            min={0.25}
-                            step={0.25}
-                            value={servings}
-                            onChange={(e) => setServings(Number(e.target.value))}
-                            className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm"
-                          />
-                        </label>
-                        <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
-                          Baseline (Me)
-                          <input
-                            type="number"
-                            min={0.25}
-                            step={0.25}
-                            value={baselineServings}
-                            onChange={(e) => setBaselineServings(Number(e.target.value))}
-                            className="w-24 rounded border border-zinc-300 px-2 py-1 text-sm"
-                          />
-                        </label>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label className="flex items-center gap-2 text-sm text-zinc-700">
-                            Meal type
-                            <select
-                              value={mealType}
-                              onChange={(e) => setMealType(e.target.value)}
-                              className="rounded border border-zinc-300 px-2 py-1 text-sm"
-                            >
-                              <option value="">Not set</option>
-                              <option value="breakfast">Breakfast</option>
-                              <option value="snack">Snack</option>
-                              <option value="lunch">Lunch</option>
-                              <option value="dinner">Dinner</option>
-                            </select>
-                          </label>
-                          <button
-                            onClick={handleMealTypeSave}
-                            disabled={savingMealType}
-                            className="rounded border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
-                          >
-                            {savingMealType ? "Saving…" : "Save meal type"}
-                          </button>
-                        </div>
-                        <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700">
-                          <span>{imageUploading ? "Uploading…" : "Upload image"}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="sr-only"
-                            disabled={imageUploading}
-                            onChange={handleImageUpload}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSettingsOpen(false);
-                            handleDelete();
-                          }}
-                          disabled={deleting}
-                          className="rounded border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+        {/* Top controls */}
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+          <Link
+            href="/recipes"
+            aria-label="Back"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow backdrop-blur"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </Link>
+          <div className="flex items-center gap-2">
+            <FavoriteButton recipeId={recipe._id} initialFavorited={recipe.favorited} />
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow backdrop-blur"
+              title="Print"
+            >
+              <PrintIcon className="h-5 w-5" />
+            </button>
+            <div className="relative" ref={settingsRef}>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-zinc-800 shadow backdrop-blur"
+                title="Recipe settings"
+              >
+                <SettingsIcon className="h-5 w-5" />
+              </button>
+              {settingsOpen && (
+                <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-card border border-zinc-100 bg-white p-4 shadow-xl">
+                  <p className="mb-3 text-xs font-semibold uppercase text-zinc-500">Settings</p>
+                  <div className="space-y-3">
+                    <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
+                      Servings
+                      <input
+                        type="number"
+                        min={0.25}
+                        step={0.25}
+                        value={servings}
+                        onChange={(e) => setServings(Number(e.target.value))}
+                        className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between gap-2 text-sm text-zinc-700">
+                      Baseline (Me)
+                      <input
+                        type="number"
+                        min={0.25}
+                        step={0.25}
+                        value={baselineServings}
+                        onChange={(e) => setBaselineServings(Number(e.target.value))}
+                        className="w-24 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm text-zinc-700">
+                        Meal type
+                        <select
+                          value={mealType}
+                          onChange={(e) => setMealType(e.target.value)}
+                          className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
                         >
-                          {deleting ? "Deleting…" : "Delete recipe"}
-                        </button>
-                      </div>
+                          <option value="">Not set</option>
+                          <option value="breakfast">Breakfast</option>
+                          <option value="snack">Snack</option>
+                          <option value="lunch">Lunch</option>
+                          <option value="dinner">Dinner</option>
+                        </select>
+                      </label>
+                      <button
+                        onClick={handleMealTypeSave}
+                        disabled={savingMealType}
+                        className="rounded-lg border border-zinc-300 px-3 py-1 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50"
+                      >
+                        {savingMealType ? "Saving…" : "Save"}
+                      </button>
                     </div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-white/90">
-                  {mealType ? String(mealType) : "Recipe"}
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold text-white drop-shadow sm:text-3xl">
-                  {recipe.title}
-                </h1>
-              </div>
-            </div>
-          </div>
-
-          {recipeImages.length > 1 && (
-            <div className="rounded-lg border border-zinc-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">More photos</p>
-              <div className="flex flex-wrap gap-2">
-                {recipeImages.slice(1).map((img, idx) => (
-                  <img
-                    key={img._key ?? img.asset?._id ?? idx}
-                    src={img.asset?.url}
-                    alt=""
-                    className="h-24 w-auto rounded object-cover"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-            <p className="text-sm font-semibold text-zinc-800">Who is eating?</p>
-            <div className="mt-2 flex flex-wrap gap-3 text-sm text-zinc-700">
-              {Object.keys(extraMultipliers).map((person) => (
-                <label key={person} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!selectedPeople[person]}
-                    onChange={(e) =>
-                      setSelectedPeople((prev) => ({
-                        ...prev,
-                        [person]: e.target.checked,
-                      }))
-                    }
-                  />
-                  <span>
-                    {person} ({extraMultipliers[person]}x)
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-4">
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-zinc-800">Ingredients</h2>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">
-                  {recipe.ingredients?.map((ing: any, idx: number) => (
-                    <li key={ing._key || idx}>
-                      {ing.originalText}
-                      {ing.grams
-                        ? ` · ${ing.grams} g → ${(ing.grams * (totalFactor || 1)).toFixed(1)} g scaled`
-                        : ""}
-                      {(ing.quantityNumber || ing.quantityText || ing.quantity) && (
-                        <div className="text-xs text-zinc-600">
-                          {(() => {
-                            const factor = totalFactor || 1;
-                            const qty =
-                              parseQuantity(ing.quantityText || ing.quantity || null) ??
-                              (typeof ing.quantityNumber === "number" ? ing.quantityNumber : null);
-                            if (qty === null) return null;
-                            if (typeof qty === "object" && "low" in qty && "high" in qty) {
-                              const scaledLow = qty.low * factor;
-                              const scaledHigh = qty.high * factor;
-                              return `Scaled qty: ${formatQuantity(scaledLow)}-${formatQuantity(scaledHigh)}${ing.unit ? ` ${ing.unit}` : ""}`;
-                            }
-                            const scaled = qty * factor;
-                            return `Scaled qty: ${formatQuantity(scaled)}${ing.unit ? ` ${ing.unit}` : ""}`;
-                          })()}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-zinc-800">Instructions</h2>
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-zinc-700">
-                  {recipe.instructions?.map((step: string, idx: number) => (
-                    <li key={idx}>{step}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <NutritionCard macros={macros} servings={servings} />
-              <FamilyMacroTable macros={macros} baselineServings={baselineServings} />
-              {totalGrams > 0 && (
-                <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm text-sm text-zinc-700">
-                  <p className="font-semibold text-zinc-800">
-                    {cookedEstimate ? "Final approx. weight per person (cooked)" : "Approx. weight per person"}
-                  </p>
-                  {cookedWeightLoading && (
-                    <p className="mt-2 text-zinc-500">Estimating cooked weight…</p>
-                  )}
-                  {cookedWeightError && (
-                    <p className="mt-2 text-amber-600">Cooked weight estimate unavailable; showing raw weights.</p>
-                  )}
-                  {!cookedWeightLoading && (
-                    <ul className="mt-2 space-y-3">
-                      {Object.entries(selectedPeople)
-                        .filter(([, checked]) => checked)
-                        .map(([person]) => {
-                          const mult = extraMultipliers[person] ?? 1;
-                          const proteinG = cookedEstimate
-                            ? perServingProteinCooked * mult
-                            : perServingProteinGrams * mult;
-                          const otherG = cookedEstimate
-                            ? perServingOtherCooked * mult
-                            : perServingOtherGrams * mult;
-                          const totalG = proteinG + otherG;
-                          return (
-                            <li key={person} className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
-                              <span className="font-medium text-zinc-800">{person}</span>
-                              <ul className="mt-1 ml-2 space-y-0.5 text-zinc-600">
-                                {totalProteinGrams > 0 && (
-                                  <li>
-                                    Main protein: {proteinG.toFixed(1)} g ({formatOz(proteinG)} oz)
-                                  </li>
-                                )}
-                                {totalOtherGrams > 0 && (
-                                  <li>
-                                    Everything else: {otherG.toFixed(1)} g ({formatOz(otherG)} oz)
-                                  </li>
-                                )}
-                                <li className="text-zinc-500">
-                                  Total: {totalG.toFixed(1)} g ({formatOz(totalG)} oz)
-                                </li>
-                              </ul>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  )}
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-700">
+                      <span>{imageUploading ? "Uploading…" : "Upload image"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        disabled={imageUploading}
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        handleDelete();
+                      }}
+                      disabled={deleting}
+                      className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {deleting ? "Deleting…" : "Delete recipe"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
+
+        {/* Title + macro chips */}
+        <div className="absolute inset-x-0 bottom-0 p-5">
+          {mealType && (
+            <span className="inline-block rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-700">
+              {String(mealType)}
+            </span>
+          )}
+          <h1 className="mt-2 text-2xl font-bold leading-tight text-white drop-shadow">
+            {recipe.title}
+          </h1>
+          {heroChips.length > 0 && (
+            <div className="mt-3 flex gap-2">
+              {heroChips.map((chip) => (
+                <div
+                  key={chip.label}
+                  className="flex-1 rounded-2xl bg-white/95 px-2 py-1.5 text-center backdrop-blur"
+                >
+                  <p className={`text-sm font-bold ${chip.color}`}>{chip.value}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                    {chip.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Prev / Next */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={prevId ? `/recipes/${prevId}` : "#"}
+          className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium ${
+            prevId ? "bg-white text-zinc-700 shadow-sm" : "pointer-events-none text-zinc-300"
+          }`}
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+          Prev
+        </Link>
+        <Link
+          href={nextId ? `/recipes/${nextId}` : "#"}
+          className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium ${
+            nextId ? "bg-white text-zinc-700 shadow-sm" : "pointer-events-none text-zinc-300"
+          }`}
+        >
+          Next
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+        </Link>
+      </div>
+
+      {/* Pinned primary CTA */}
+      <AddToMealPlan
+        recipeId={recipe._id}
+        mealPlans={mealPlans}
+        defaultMealType={recipe.mealType}
+        variant="button"
+        className="!w-full !justify-center !rounded-full !border-brand-500 !bg-brand-500 !px-5 !py-3 !text-base !text-white shadow-md shadow-brand-500/30"
+      />
+
+      {validImages.length > 1 && (
+        <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
+          {validImages.slice(1).map((img, idx) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={img._key ?? img.asset?._id ?? idx}
+              src={img.asset?.url}
+              alt=""
+              className="h-24 w-24 shrink-0 rounded-2xl object-cover"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Who is eating — chip control */}
+      <div className="rounded-card bg-white p-5 shadow-sm">
+        <p className="text-sm font-semibold text-zinc-800">Who&apos;s eating?</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Object.keys(extraMultipliers).map((person) => {
+            const active = !!selectedPeople[person];
+            return (
+              <button
+                key={person}
+                type="button"
+                onClick={() =>
+                  setSelectedPeople((prev) => ({ ...prev, [person]: !prev[person] }))
+                }
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "bg-brand-500 text-white shadow-sm"
+                    : "bg-zinc-100 text-zinc-600"
+                }`}
+              >
+                {person}
+                <span className={active ? "text-white/70" : "text-zinc-400"}>
+                  {" "}
+                  {extraMultipliers[person]}x
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Ingredients */}
+      <div className="rounded-card bg-white p-5 shadow-sm">
+        <h2 className="text-base font-bold text-zinc-900">Ingredients</h2>
+        <ul className="mt-3 space-y-2 text-sm text-zinc-700">
+          {recipe.ingredients?.map((ing: any, idx: number) => (
+            <li key={ing._key || idx} className="border-b border-zinc-50 pb-2 last:border-0 last:pb-0">
+              <span className="font-medium text-zinc-800">{ing.originalText}</span>
+              {ing.grams ? (
+                <span className="text-zinc-400">
+                  {" "}· {ing.grams} g → {(ing.grams * (totalFactor || 1)).toFixed(1)} g
+                </span>
+              ) : null}
+              {(ing.quantityNumber || ing.quantityText || ing.quantity) && (
+                <div className="text-xs text-brand-600">
+                  {(() => {
+                    const factor = totalFactor || 1;
+                    const qty =
+                      parseQuantity(ing.quantityText || ing.quantity || null) ??
+                      (typeof ing.quantityNumber === "number" ? ing.quantityNumber : null);
+                    if (qty === null) return null;
+                    if (typeof qty === "object" && "low" in qty && "high" in qty) {
+                      const scaledLow = qty.low * factor;
+                      const scaledHigh = qty.high * factor;
+                      return `Scaled: ${formatQuantity(scaledLow)}-${formatQuantity(scaledHigh)}${ing.unit ? ` ${ing.unit}` : ""}`;
+                    }
+                    const scaled = qty * factor;
+                    return `Scaled: ${formatQuantity(scaled)}${ing.unit ? ` ${ing.unit}` : ""}`;
+                  })()}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Instructions */}
+      <div className="rounded-card bg-white p-5 shadow-sm">
+        <h2 className="text-base font-bold text-zinc-900">Instructions</h2>
+        <ol className="mt-3 space-y-3">
+          {recipe.instructions?.map((step: string, idx: number) => (
+            <li key={idx} className="flex gap-3 text-sm text-zinc-700">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                {idx + 1}
+              </span>
+              <span className="pt-0.5">{step}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Nutrition */}
+      <NutritionCard macros={macros} servings={servings} />
+      <FamilyMacroTable macros={macros} baselineServings={baselineServings} />
+
+      {totalGrams > 0 && (
+        <div className="rounded-card bg-white p-5 text-sm text-zinc-700 shadow-sm">
+          <p className="font-semibold text-zinc-800">
+            {cookedEstimate ? "Final weight per person (cooked)" : "Approx. weight per person"}
+          </p>
+          {cookedWeightLoading && <p className="mt-2 text-zinc-500">Estimating cooked weight…</p>}
+          {cookedWeightError && (
+            <p className="mt-2 text-amber-600">Cooked weight estimate unavailable; showing raw weights.</p>
+          )}
+          {!cookedWeightLoading && (
+            <ul className="mt-2 space-y-3">
+              {Object.entries(selectedPeople)
+                .filter(([, checked]) => checked)
+                .map(([person]) => {
+                  const mult = extraMultipliers[person] ?? 1;
+                  const proteinG = cookedEstimate
+                    ? perServingProteinCooked * mult
+                    : perServingProteinGrams * mult;
+                  const otherG = cookedEstimate
+                    ? perServingOtherCooked * mult
+                    : perServingOtherGrams * mult;
+                  const totalG = proteinG + otherG;
+                  return (
+                    <li key={person} className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
+                      <span className="font-medium text-zinc-800">{person}</span>
+                      <ul className="mt-1 ml-2 space-y-0.5 text-zinc-600">
+                        {totalProteinGrams > 0 && (
+                          <li>Main protein: {proteinG.toFixed(1)} g ({formatOz(proteinG)} oz)</li>
+                        )}
+                        {totalOtherGrams > 0 && (
+                          <li>Everything else: {otherG.toFixed(1)} g ({formatOz(otherG)} oz)</li>
+                        )}
+                        <li className="text-zinc-500">Total: {totalG.toFixed(1)} g ({formatOz(totalG)} oz)</li>
+                      </ul>
+                    </li>
+                  );
+                })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Print-only layout: half letter (5.5" x 8.5") — scaled version */}
       <div
@@ -644,9 +674,9 @@ export function RecipeDetailClient({ recipe, nav }: Props) {
               <> — scaled for {Object.entries(selectedPeople).filter(([, c]) => c).map(([p]) => p).join(", ")}</>
             )}
           </p>
-          {recipeImages.length > 0 && recipeImages[0]?.asset?.url && (
+          {coverUrl && (
             <img
-              src={recipeImages[0].asset.url}
+              src={coverUrl}
               alt=""
               className="w-full max-h-32 object-cover rounded mb-3"
             />

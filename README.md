@@ -23,12 +23,6 @@ OPENAI_API_KEY=your_openai_key
 NEXT_PUBLIC_SANITY_PROJECT_ID=your_project_id
 NEXT_PUBLIC_SANITY_DATASET=production
 
-# Optional – Recipe search (Algolia)
-NEXT_PUBLIC_ALGOLIA_APP_ID=your_algolia_app_id
-NEXT_PUBLIC_ALGOLIA_API_KEY=your_algolia_search_only_key
-ALGOLIA_APP_ID=your_algolia_app_id
-ALGOLIA_WRITE_KEY=your_algolia_write_key
-
 # Optional – Recipe image generation (Agent Actions)
 SANITY_SCHEMA_ID=your_schema_id
 ```
@@ -41,9 +35,10 @@ npm run dev
 ```
 
 ## Features
-- Import recipes from PDFs or pasted text (`/import` → `/api/import`):
-  - Extract text (pdf-parse) → OpenAI JSON parse (prompt in `src/lib/prompts.ts`) → Zod validation → Sanity documents.
-  - Stores raw `sourceText`, sets `importStatus` + `confidence`, auto-runs nutrition stub if macros not provided.
+- Import recipes from PDFs, URLs, or pasted text (`/import` → `/api/import`):
+  - PDFs: extract text (pdf-parse) → OpenAI JSON parse (prompt in `src/lib/prompts.ts`) → Zod validation → Sanity documents.
+  - URLs: fetch the page, import `schema.org/Recipe` JSON-LD when available, then fall back to OpenAI parsing.
+  - Stores raw `sourceText`, sets `importStatus` + `confidence`, and estimates missing nutrition with OpenAI before falling back to the local nutrition stub.
 - Recipe management:
   - `/recipes` list with filters (status, tag); `/recipes/[id]` detail with servings editor, nutrition display, family scaling, “Compute nutrition” button calling `/api/nutrition`.
 - Review queue:
@@ -58,21 +53,16 @@ npm run dev
 - Ingredient normalization + grams best-effort via OpenAI (`/api/nutrition`); stub macro computation is in `src/lib/nutrition.ts` and is easy to replace with USDA/Edamam later.
 
 ## API routes
-- `POST /api/import` — multipart (PDF files) or form data (text). Creates recipe docs, runs nutrition stub, returns ids/status.
+- `POST /api/import` — multipart (PDF files), recipe URL, or form data (text). Creates recipe docs, fills missing metadata/nutrition, returns ids/status.
 - `POST /api/nutrition` — normalize ingredients (OpenAI) if grams missing, run nutrition stub, patch recipe.
 - `POST /api/meal-plans` — create plan.
 - `PATCH /api/meal-plans/[id]` — append meal entry.
 
-## Recipe search (Algolia)
-- Search on the **Recipes** page uses [Algolia](https://www.algolia.com/) and indexes recipe **titles**, **ingredients**, and **instructions** (see [Sanity + Algolia guide](https://www.sanity.io/docs/developer-guides/how-to-implement-front-end-search-with-sanity)).
-- **Setup:** Create an Algolia app, then set in `.env` / `.env.local`:
-  - `NEXT_PUBLIC_ALGOLIA_APP_ID` — Algolia Application ID
-  - `NEXT_PUBLIC_ALGOLIA_API_KEY` — Search-Only API Key (safe for frontend)
-  - `ALGOLIA_WRITE_KEY` — Write API Key (for sync script and Sanity Function only)
-- **First-time index:** run `npm run algolia:sync` (uses `scripts/algolia-initial-sync.ts` to push all recipes to the `recipes` index).
-- **Ongoing sync (optional):** Deploy the Sanity Function so create/update/delete on recipes update Algolia:
-  - Ensure `sanity.blueprint.ts` and `functions/algolia-recipe-sync` are in the project.
-  - Run `npx sanity blueprints deploy`. Required env: `ALGOLIA_APP_ID` or `NEXT_PUBLIC_ALGOLIA_APP_ID`, `ALGOLIA_WRITE_KEY`, `SANITY_PROJECT_ID` or `NEXT_PUBLIC_SANITY_PROJECT_ID`, `SANITY_DATASET` or `NEXT_PUBLIC_SANITY_DATASET`. `SANITY_API_TOKEN` is required if the CLI needs to authenticate to deploy.
+## Recipe search (native GROQ)
+- Search on the **Recipes** page uses Sanity's built-in [GROQ full-text search](https://www.sanity.io/docs/content-lake/search-content-with-groq) — no external search service, no sync step, and always in sync with your content.
+- The search box calls `GET /api/recipes/search?q=...`, which runs a BM25-scored GROQ query (`src/lib/sanity/queries.ts` → `recipeSearchQuery`) over recipe **title**, **tags**, **mealType**, **ingredients**, and **instructions**, with title/tags boosted. Each query token is prefix-matched for as-you-type results.
+- No configuration required beyond the standard Sanity env vars.
+- Optional upgrade: add semantic/hybrid search with `text::semanticSimilarity()` (requires dataset embeddings; usage is plan-dependent).
 
 ## Recipe images (Sanity Agent Actions / MCP)
 - You can generate one image per recipe using the [Sanity MCP server](https://www.sanity.io/docs/ai/mcp-server) **`generate_image`** tool, or the same backend via script.

@@ -1,16 +1,19 @@
 export const recipesListQuery = `
 *[_type == "recipe" 
   && (!defined($importStatus) || $importStatus == null || importStatus == $importStatus)
-  && (!defined($tag) || $tag == null || $tag in tags)
+  && (!defined($tagFilter) || $tagFilter == null || $tagFilter in tags)
   && (!defined($mealType) || $mealType == null || $mealType == "" || mealType == $mealType)
+  && (!defined($favorited) || $favorited == null || favorited == $favorited)
 ] | order(_createdAt desc) {
   _id,
   title,
+  favorited,
   importStatus,
   nutritionStatus,
   tags,
   servings,
-  mealType
+  mealType,
+  "coverImage": images[0].asset->url
 }`;
 
 export const recipeByIdQuery = `
@@ -19,9 +22,12 @@ export const recipeByIdQuery = `
   title,
   sourceType,
   sourceName,
+  sourceUrl,
+  sourceKey,
   sourceText,
   servings,
   mealType,
+  favorited,
   images[] {
     _key,
     asset-> { _id, url }
@@ -49,6 +55,7 @@ export const mealPlanByIdQuery = `
   _id,
   weekOf,
   meals[]{
+    _key,
     date,
     mealType,
     baselineServingsForMe,
@@ -56,10 +63,64 @@ export const mealPlanByIdQuery = `
       _id,
       title,
       servings,
+      ingredients[],
       nutritionComputed,
       nutritionProvided
     }
   }
+}`;
+
+export const recipeSearchQuery = `
+*[_type == "recipe" && (
+  title match $term ||
+  tags[] match $term ||
+  mealType match $term ||
+  ingredients[].originalText match $term ||
+  instructions match $term
+)] | score(
+  boost(title match $term, 4),
+  boost(tags[] match $term, 2),
+  boost(mealType match $term, 2),
+  boost(ingredients[].originalText match $term, 1),
+  boost(instructions match $term, 1)
+) | order(_score desc) [0...$limit] {
+  _id,
+  title,
+  mealType,
+  tags,
+  favorited,
+  "ingredientsText": array::join(ingredients[].originalText, " "),
+  "coverImage": images[0].asset->url,
+  _score
+}`;
+
+export const currentWeekPlanQuery = `
+*[_type == "mealPlan" && weekOf <= $today] | order(weekOf desc)[0]{
+  _id,
+  weekOf,
+  meals[]{
+    date,
+    mealType,
+    baselineServingsForMe,
+    recipe->{
+      _id,
+      title,
+      servings,
+      mealType,
+      "coverImage": images[0].asset->url,
+      nutritionComputed,
+      nutritionProvided
+    }
+  }
+}`;
+
+export const homeRailQuery = `
+*[_type == "recipe"] | order(favorited desc, _createdAt desc)[0...12]{
+  _id,
+  title,
+  favorited,
+  mealType,
+  "coverImage": images[0].asset->url
 }`;
 
 export const recipesNavQuery = `
@@ -67,5 +128,6 @@ export const recipesNavQuery = `
   _id,
   title,
   mealType,
+  favorited,
   importStatus
 }`;

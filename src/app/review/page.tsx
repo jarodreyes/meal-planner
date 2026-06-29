@@ -16,8 +16,8 @@ export default async function ReviewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm font-medium text-zinc-500">Review</p>
-        <h1 className="text-2xl font-semibold text-zinc-900">Needs review</h1>
+        <p className="text-sm font-medium text-brand-500">Review</p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Needs review</h1>
         <p className="text-sm text-zinc-600">
           Recipes that failed parsing or were flagged with low confidence.
         </p>
@@ -29,7 +29,7 @@ export default async function ReviewPage() {
             <Link
               key={recipe._id}
               href={`/recipes/${recipe._id}`}
-              className="block rounded-lg border border-zinc-200 bg-white p-3 shadow-sm hover:border-zinc-300"
+              className="block rounded-card bg-white p-4 shadow-sm"
             >
               <p className="text-sm font-semibold text-zinc-800">{recipe.title}</p>
               <p className="text-xs uppercase tracking-wide text-zinc-500">

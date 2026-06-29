@@ -35,21 +35,21 @@ export function CreateMealPlanForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm"
+      className="space-y-3 rounded-card bg-white p-5 shadow-sm"
     >
       <div>
-        <label className="text-sm text-zinc-700">Week of (YYYY-MM-DD)</label>
+        <label className="text-sm font-medium text-zinc-700">Start a new week</label>
         <input
           type="date"
           value={weekOf}
           onChange={(e) => setWeekOf(e.target.value)}
-          className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-xl border border-zinc-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
       <button
         type="submit"
         disabled={!weekOf || isSubmitting}
-        className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+        className="w-full rounded-full bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-500/30 disabled:opacity-50"
       >
         {isSubmitting ? "Creating…" : "Create meal plan"}
       </button>
