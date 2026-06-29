@@ -23,19 +23,63 @@ export type ShoppingPlanMeal = {
 export type ShoppingListItem = {
   key: string;
   name: string;
-  unit: string | null;
-  quantity: number | null;
+  /** Summed gram weight across recipes (preferred for scale-based recipes). */
   grams: number | null;
+  /** Summed volume/count amounts grouped by unit, for non-gram ingredients. */
+  units: { unit: string | null; quantity: number }[];
   recipes: string[];
+  /** Lines we couldn't turn into a number (kept verbatim for reference). */
   notes: string[];
 };
 
-function cleanName(ing: ShoppingIngredient): string {
+const UNICODE_FRACTIONS = "½⅓⅔¼¾⅛⅜⅝⅞⅕⅖⅗⅘⅙⅚";
+const UNIT_WORDS = [
+  "cups", "cup", "tbsps", "tbsp", "tablespoons", "tablespoon",
+  "tsps", "tsp", "teaspoons", "teaspoon", "grams", "gram", "g",
+  "kg", "ml", "l", "ounces", "ounce", "oz", "pounds", "pound", "lbs", "lb",
+  "scoops", "scoop", "cloves", "clove", "pinch", "slices", "slice",
+  "pieces", "piece",
+];
+
+/** Remove a leading quantity (incl. unicode fractions/ranges) and unit word. */
+function stripLeadingQuantity(text: string): string {
+  let t = text.trim();
+  const qtyRe = new RegExp(
+    `^\\s*(\\d+\\s*[-–]\\s*\\d+|\\d+\\s+\\d+\\/\\d+|\\d+\\s*[${UNICODE_FRACTIONS}]|\\d+\\/\\d+|[${UNICODE_FRACTIONS}]|\\d+(?:\\.\\d+)?)\\s*`
+  );
+  t = t.replace(qtyRe, "");
+  const unitRe = new RegExp(`^(?:${UNIT_WORDS.join("|")})\\b\\s*`, "i");
+  t = t.replace(unitRe, "");
+  return t.trim();
+}
+
+/** Human-readable ingredient name (prefers the normalized name from import). */
+function displayName(ing: ShoppingIngredient): string {
   const normalized = ing.nameNormalized?.trim();
   if (normalized) return normalized;
   const original = ing.originalText?.trim();
-  if (original) return original;
+  if (original) {
+    const stripped = stripLeadingQuantity(original);
+    return stripped || original;
+  }
   return "Other";
+}
+
+/**
+ * Conservative grouping key: lowercased, parentheticals and punctuation
+ * removed, and tokens sorted so word-order/comma differences merge (e.g.
+ * "plain Greek yogurt" and "Greek yogurt, plain") without stripping
+ * descriptors or brands.
+ */
+function canonicalKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(" ");
 }
 
 function formatNumber(value: number): string {
@@ -46,9 +90,9 @@ function formatNumber(value: number): string {
 
 /**
  * Build a consolidated shopping list from the meals of a weekly plan.
- * Ingredients are scaled by each meal's baseline servings vs. the recipe's
- * base servings, then grouped by normalized name + unit. Quantities and grams
- * are summed where available; otherwise the original line is kept as a note.
+ * Ingredients are scaled to feed everyone eating each meal, then grouped by a
+ * canonical name. Gram weights are summed (preferred); otherwise like-unit
+ * amounts are summed; anything unparseable is kept as a note.
  */
 export function buildShoppingList(meals: ShoppingPlanMeal[]): ShoppingListItem[] {
   const groups = new Map<string, ShoppingListItem>();
@@ -71,18 +115,16 @@ export function buildShoppingList(meals: ShoppingPlanMeal[]): ShoppingListItem[]
     const recipeTitle = recipe.title?.trim() || "Untitled recipe";
 
     for (const ing of recipe.ingredients) {
-      const name = cleanName(ing);
-      const unit = ing.unit?.trim().toLowerCase() || null;
-      const key = `${name.toLowerCase()}|${unit ?? ""}`;
+      const name = displayName(ing);
+      const key = canonicalKey(name);
 
       let group = groups.get(key);
       if (!group) {
         group = {
           key,
           name,
-          unit,
-          quantity: null,
           grams: null,
+          units: [],
           recipes: [],
           notes: [],
         };
@@ -93,21 +135,27 @@ export function buildShoppingList(meals: ShoppingPlanMeal[]): ShoppingListItem[]
         group.recipes.push(recipeTitle);
       }
 
+      const grams = typeof ing.grams === "number" && ing.grams > 0 ? ing.grams : null;
       const quantityNumber =
-        typeof ing.quantityNumber === "number" ? ing.quantityNumber : null;
-      const grams = typeof ing.grams === "number" ? ing.grams : null;
+        typeof ing.quantityNumber === "number" && ing.quantityNumber > 0
+          ? ing.quantityNumber
+          : null;
 
       let added = false;
-      if (quantityNumber != null) {
-        group.quantity = (group.quantity ?? 0) + quantityNumber * factor;
-        added = true;
-      }
       if (grams != null) {
         group.grams = (group.grams ?? 0) + grams * factor;
         added = true;
       }
+      if (quantityNumber != null) {
+        const unit = ing.unit?.trim().toLowerCase() || null;
+        const existing = group.units.find((u) => u.unit === unit);
+        if (existing) existing.quantity += quantityNumber * factor;
+        else group.units.push({ unit, quantity: quantityNumber * factor });
+        added = true;
+      }
 
       if (!added) {
+        const unit = ing.unit?.trim() || null;
         const line = ing.quantityText
           ? `${ing.quantityText}${unit ? ` ${unit}` : ""} ${name}`.trim()
           : ing.originalText?.trim() || name;
@@ -118,19 +166,17 @@ export function buildShoppingList(meals: ShoppingPlanMeal[]): ShoppingListItem[]
     }
   }
 
-  return Array.from(groups.values()).sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Human-readable amount, e.g. "2 cups", "150 g", or null when unknown. */
+/** Human-readable amount, e.g. "300 g", "2 cup", "300 g · 1 tbsp", or null. */
 export function formatShoppingAmount(item: ShoppingListItem): string | null {
   const parts: string[] = [];
-  if (item.quantity != null) {
-    parts.push(`${formatNumber(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`);
-  }
   if (item.grams != null) {
-    parts.push(`${formatNumber(item.grams)} g`);
+    parts.push(`${Math.round(item.grams)} g`);
+  }
+  for (const u of item.units) {
+    parts.push(`${formatNumber(u.quantity)}${u.unit ? ` ${u.unit}` : ""}`);
   }
   return parts.length ? parts.join(" · ") : null;
 }
