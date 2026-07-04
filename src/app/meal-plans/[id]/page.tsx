@@ -10,6 +10,7 @@ import {
 } from "@/lib/shoppingList";
 import { AddMealForm } from "./AddMealForm";
 import { DeletePlanButton, RemoveMealButton } from "./MealPlanActions";
+import { ShoppingList } from "./ShoppingList";
 
 // Reflect meals added/removed at runtime instead of build-time caching.
 export const dynamic = "force-dynamic";
@@ -249,35 +250,17 @@ export default async function MealPlanDetail({
       )}
 
       {shoppingList.length > 0 && (
-        <details className="rounded-card bg-white p-5 shadow-sm" open>
-          <summary className="flex cursor-pointer list-none items-center justify-between">
-            <span className="text-base font-bold text-zinc-900">🛒 Shopping list</span>
-            <span className="text-xs text-zinc-400">{shoppingList.length} items</span>
-          </summary>
-          <p className="mt-2 text-xs text-zinc-500">
-            Combined ingredients from every recipe, scaled to baseline servings.
-          </p>
-          <ul className="mt-3 divide-y divide-zinc-100">
-            {shoppingList.map((item) => {
-              const amount = formatShoppingAmount(item);
-              return (
-                <li
-                  key={item.key}
-                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 text-sm"
-                >
-                  <span className="font-medium text-zinc-800">
-                    {amount ? `${amount} ` : ""}
-                    {item.name}
-                  </span>
-                  <span className="text-xs text-zinc-400">{item.recipes.join(", ")}</span>
-                  {item.notes.length > 0 && (
-                    <span className="w-full text-xs text-zinc-400">{item.notes.join("; ")}</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </details>
+        <ShoppingList
+          items={shoppingList.map((item) => {
+            const amount = formatShoppingAmount(item);
+            return {
+              key: item.key,
+              label: `${amount ? `${amount} ` : ""}${item.name}`.trim(),
+              recipes: item.recipes.join(", "),
+              notes: item.notes,
+            };
+          })}
+        />
       )}
 
       {Object.keys(dailyTotals).length > 0 && (
