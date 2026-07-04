@@ -11,6 +11,9 @@ import { RecipeCard } from "@/app/components/RecipeCard";
 import { MacroLine, scaleMacrosForServings } from "@/lib/nutrition";
 import { gradientForMealType } from "@/lib/mealTypes";
 
+// Dashboard reflects runtime data (today's plan, favorites); render fresh.
+export const dynamic = "force-dynamic";
+
 type PlanMeal = {
   date: string;
   mealType: string;

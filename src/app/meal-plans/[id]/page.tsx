@@ -11,6 +11,9 @@ import {
 import { AddMealForm } from "./AddMealForm";
 import { DeletePlanButton, RemoveMealButton } from "./MealPlanActions";
 
+// Reflect meals added/removed at runtime instead of build-time caching.
+export const dynamic = "force-dynamic";
+
 type Meal = {
   _key?: string;
   date: string;
